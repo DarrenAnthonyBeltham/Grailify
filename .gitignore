@@ -1,0 +1,12 @@
+# Dependencies
+/node_modules
+
+# Build files
+/.next/
+/out/
+
+# Go backend executable
+/backend/backend
+
+# Other
+.DS_Store
