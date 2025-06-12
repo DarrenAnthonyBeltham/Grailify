@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
-  <a href={href} className="text-sm font-medium text-neutral-600 hover:text-black transition-colors">
+  <Link href={href} className="text-sm font-medium text-neutral-600 hover:text-black transition-colors">
     {children}
-  </a>
+  </Link>
 );
 
 const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -16,14 +17,27 @@ const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export default function Navbar() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    setIsLoggedIn(!!token);
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    setIsLoggedIn(false);
+    window.location.href = '/';
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-neutral-200">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-8">
-            <a href="/" className="text-2xl font-bold text-black tracking-tighter">
+            <Link href="/" className="text-2xl font-bold text-black tracking-tighter">
               Grailify
-            </a>
+            </Link>
             <nav className="hidden md:flex items-center space-x-6">
               <NavLink href="/browse/sneakers">Sneakers</NavLink>
               <NavLink href="/browse/apparel">Apparel</NavLink>
@@ -46,9 +60,23 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center space-x-4">
-            <a href="/login" className="hidden sm:block text-sm font-medium text-neutral-600 hover:text-black transition-colors">Log In</a>
-            <a href="/signup" className="hidden sm:block text-sm font-medium bg-black text-white px-4 py-2 rounded-full hover:bg-neutral-800 transition-colors">Sign Up</a>
-            <a href="/sell" className="text-sm font-medium border border-neutral-300 px-4 py-2 rounded-full hover:bg-neutral-100 transition-colors">Sell</a>
+            {isLoggedIn ? (
+              <>
+                <NavLink href="/account">My Account</NavLink>
+                <button
+                  onClick={handleLogout}
+                  className="hidden sm:block text-sm font-medium text-neutral-600 hover:text-black transition-colors"
+                >
+                  Log Out
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="hidden sm:block text-sm font-medium text-neutral-600 hover:text-black transition-colors">Log In</Link>
+                <Link href="/signup" className="hidden sm:block text-sm font-medium bg-black text-white px-4 py-2 rounded-full hover:bg-neutral-800 transition-colors">Sign Up</Link>
+              </>
+            )}
+             <Link href="/sell" className="text-sm font-medium border border-neutral-300 px-4 py-2 rounded-full hover:bg-neutral-100 transition-colors">Sell</Link>
           </div>
         </div>
       </div>

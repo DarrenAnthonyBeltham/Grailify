@@ -1,1 +1,38 @@
 @import "tailwindcss";
+
+.thumb {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent; 
+  position: absolute;
+  left: 0;
+  height: 8px; 
+  pointer-events: none; 
+}
+
+.thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: white; 
+  border: 2px solid black;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto; 
+}
+
+.thumb::-moz-range-thumb {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border: 2px solid black;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+}

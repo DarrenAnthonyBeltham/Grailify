@@ -33,7 +33,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
-
+ 
   return (
     <div className="flex items-center justify-center min-h-screen bg-neutral-50">
       <div className="w-full max-w-md p-8 space-y-8 bg-white border border-neutral-200 rounded-lg shadow-sm">
