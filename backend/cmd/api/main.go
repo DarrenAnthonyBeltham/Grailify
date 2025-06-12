@@ -11,6 +11,7 @@ import (
 )
 
 func main() {
+	
 	db := database.InitDB()
 	defer database.CloseDB(db)
 
@@ -23,7 +24,7 @@ func main() {
 	mux.HandleFunc("/api/login", authHandler.Login)
 	mux.HandleFunc("/api/items", itemsHandler.GetAllItems)
 
-	log.Println("Starting server on :8080")
+	log.Println("Starting Grailify server on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("Could not start server: %v", err)
 	}

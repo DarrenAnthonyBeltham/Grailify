@@ -12,33 +12,33 @@ export default function Footer() {
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-black tracking-wider">Buy</h3>
                         <div className="flex flex-col space-y-3">
-                            <FooterLink href="#">How it Works</FooterLink>
-                            <FooterLink href="#">Buyer Protection</FooterLink>
-                            <FooterLink href="#">Authenticity Guarantee</FooterLink>
+                            <FooterLink href="/how-it-works">How it Works</FooterLink>
+                            <FooterLink href="/buyer-protection">Buyer Protection</FooterLink>
+                            <FooterLink href="/authenticity-guarantee">Authenticity Guarantee</FooterLink>
                         </div>
                     </div>
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-black tracking-wider">Sell</h3>
                         <div className="flex flex-col space-y-3">
-                            <FooterLink href="#">How to Sell</FooterLink>
-                            <FooterLink href="#">Seller Fees</FooterLink>
-                            <FooterLink href="#">Start Selling</FooterLink>
+                            <FooterLink href="/how-to-sell">How to Sell</FooterLink>
+                            <FooterLink href="/seller-fees">Seller Fees</FooterLink>
+                            <FooterLink href="/sell">Start Selling</FooterLink>
                         </div>
                     </div>
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-black tracking-wider">Support</h3>
                         <div className="flex flex-col space-y-3">
-                            <FooterLink href="#">Help Center</FooterLink>
-                            <FooterLink href="#">Contact Us</FooterLink>
-                            <FooterLink href="#">My Account</FooterLink>
+                            <FooterLink href="/help-center">Help Center</FooterLink>
+                            <FooterLink href="/contact">Contact Us</FooterLink>
+                            <FooterLink href="/account">My Account</FooterLink>
                         </div>
                     </div>
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-black tracking-wider">About</h3>
                         <div className="flex flex-col space-y-3">
-                            <FooterLink href="#">Company</FooterLink>
-                            <FooterLink href="#">Careers</FooterLink>
-                            <FooterLink href="#">Press</FooterLink>
+                            <FooterLink href="/company">Company</FooterLink>
+                            <FooterLink href="/careers">Careers</FooterLink>
+                            <FooterLink href="/press">Press</FooterLink>
                         </div>
                     </div>
                 </div>
@@ -46,8 +46,8 @@ export default function Footer() {
                 <div className="mt-12 pt-8 border-t border-neutral-200 flex flex-col sm:flex-row justify-between items-center">
                     <p className="text-sm text-neutral-500">&copy; {new Date().getFullYear()} Grailify. All Rights Reserved.</p>
                     <div className="flex space-x-4 mt-4 sm:mt-0">
-                        <FooterLink href="#">Terms of Service</FooterLink>
-                        <FooterLink href="#">Privacy Policy</FooterLink>
+                        <FooterLink href="/terms-of-service">Terms of Service</FooterLink>
+                        <FooterLink href="/privacy-policy">Privacy Policy</FooterLink>
                     </div>
                 </div>
             </div>

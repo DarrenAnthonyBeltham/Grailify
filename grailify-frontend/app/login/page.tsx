@@ -10,8 +10,14 @@ export default function LoginPage() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setIsLoading(true);
     setError('');
+
+    if (!email || !password) {
+        setError('Please fill out all fields.');
+        return;
+    }
+
+    setIsLoading(true);
 
     try {
       const response = await fetch('/api/login', {
@@ -24,7 +30,8 @@ export default function LoginPage() {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to login');
       }
-
+      
+      localStorage.setItem('authToken', 'dummy-token'); // Replace with actual token
       window.location.href = '/';
 
     } catch (err: any) {
@@ -33,7 +40,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
- 
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-neutral-50">
       <div className="w-full max-w-md p-8 space-y-8 bg-white border border-neutral-200 rounded-lg shadow-sm">
@@ -44,7 +51,7 @@ export default function LoginPage() {
             <h2 className="mt-4 text-xl text-neutral-800">Welcome Back</h2>
             <p className="mt-2 text-sm text-neutral-600">Sign in to continue to your account.</p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="email-address" className="sr-only">Email address</label>
@@ -53,7 +60,6 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 autoComplete="email"
-                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-t-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 value={email}
@@ -67,7 +73,6 @@ export default function LoginPage() {
                 name="password"
                 type="password"
                 autoComplete="current-password"
-                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-b-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}

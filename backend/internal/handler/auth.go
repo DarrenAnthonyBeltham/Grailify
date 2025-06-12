@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -22,21 +23,27 @@ type AuthRequest struct {
 	Password string `json:"password"`
 }
 
+func respondWithError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"message": message})
+}
+
 func (h *AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	var req AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		respondWithError(w, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
 
@@ -49,38 +56,48 @@ func (h *AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 
 	userRepo := database.NewUserRepo(h.DB)
 	if err := userRepo.CreateUser(user); err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		if strings.Contains(err.Error(), "Duplicate entry") {
+			respondWithError(w, http.StatusConflict, "An account with this email already exists.")
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "Failed to create user")
+		}
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
 	}
 
 	var req AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	userRepo := database.NewUserRepo(h.DB)
 	user, err := userRepo.GetUserByEmail(req.Email)
 	if err != nil {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		if err == sql.ErrNoRows {
+			respondWithError(w, http.StatusUnauthorized, "Invalid email or password")
+		} else {
+			respondWithError(w, http.StatusInternalServerError, "Database error")
+		}
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		respondWithError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Logged in successfully"})
 }

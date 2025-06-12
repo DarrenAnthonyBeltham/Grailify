@@ -9,10 +9,26 @@ export default function SignUpPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const validateEmail = (email: string) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(String(email).toLowerCase());
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setIsLoading(true);
     setError('');
+
+    if (!username || !email || !password) {
+        setError('Please fill out all fields.');
+        return;
+    }
+
+    if (!validateEmail(email)) {
+        setError('Please enter a valid email address.');
+        return;
+    }
+
+    setIsLoading(true);
 
     try {
       const response = await fetch('/api/signup', {
@@ -26,6 +42,7 @@ export default function SignUpPage() {
         throw new Error(errorData.message || 'Failed to create account');
       }
 
+      localStorage.setItem('authToken', 'dummy-token'); // Replace with actual token
       window.location.href = '/';
 
     } catch (err: any) {
@@ -45,7 +62,7 @@ export default function SignUpPage() {
             <h2 className="mt-4 text-xl text-neutral-800">Create an Account</h2>
             <p className="mt-2 text-sm text-neutral-600">Start buying and selling your favorite grails.</p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
               <label htmlFor="username" className="sr-only">Username</label>
@@ -53,7 +70,6 @@ export default function SignUpPage() {
                 id="username"
                 name="username"
                 type="text"
-                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-t-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Username"
                 value={username}
@@ -67,7 +83,6 @@ export default function SignUpPage() {
                 name="email"
                 type="email"
                 autoComplete="email"
-                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 value={email}
@@ -81,7 +96,6 @@ export default function SignUpPage() {
                 name="password"
                 type="password"
                 autoComplete="new-password"
-                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-b-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}
