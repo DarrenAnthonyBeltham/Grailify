@@ -9,8 +9,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"grailify/backend/internal/database"
-	"grailify/backend/internal/model"
+	"grailify/internal/database"
+	"grailify/internal/model"
 )
 
 type AuthHandler struct {

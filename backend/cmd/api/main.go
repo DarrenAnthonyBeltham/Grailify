@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"grailify/backend/internal/database"
-	"grailify/backend/internal/handler"
+	"grailify/internal/database"
+	"grailify/internal/handler"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux" 

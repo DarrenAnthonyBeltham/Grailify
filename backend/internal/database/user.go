@@ -2,7 +2,7 @@ package database
 
 import (
 	"database/sql"
-	"grailify/backend/internal/model"
+	"grailify/internal/model"
 )
 
 type UserRepo struct {
