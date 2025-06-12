@@ -9,7 +9,7 @@ import (
 )
 
 func InitDB() *sql.DB {
-	dsn := fmt.Sprintf("your_user:your_password@tcp(127.0.0.1:3306)/grailify?parseTime=true")
+	dsn := fmt.Sprintf("root:@tcp(127.0.0.1:3306)/grailify?parseTime=true")
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

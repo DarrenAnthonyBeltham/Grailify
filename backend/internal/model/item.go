@@ -13,6 +13,7 @@ type Item struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Brand       string    `json:"brand"`
+	Price       float64   `json:"price"`
 	CategoryID  int       `json:"category_id"`
 	ReleaseDate time.Time `json:"release_date"`
 	ImageURL    string    `json:"image_url"`

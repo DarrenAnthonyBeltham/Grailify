@@ -8,19 +8,21 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
 
     if (!email || !password) {
-        setError('Please fill out all fields.');
-        return;
+      setError('Please fill out all fields.');
+      return;
     }
 
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(`${API_BASE}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -30,8 +32,8 @@ export default function LoginPage() {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to login');
       }
-      
-      localStorage.setItem('authToken', 'dummy-token'); // Replace with actual token
+    
+      localStorage.setItem('authToken', 'dummy-token'); 
       window.location.href = '/';
 
     } catch (err: any) {
@@ -45,11 +47,11 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-neutral-50">
       <div className="w-full max-w-md p-8 space-y-8 bg-white border border-neutral-200 rounded-lg shadow-sm">
         <div className="text-center">
-            <a href="/" className="text-3xl font-bold text-black tracking-tighter">
-              Grailify
-            </a>
-            <h2 className="mt-4 text-xl text-neutral-800">Welcome Back</h2>
-            <p className="mt-2 text-sm text-neutral-600">Sign in to continue to your account.</p>
+          <a href="/" className="text-3xl font-bold text-black tracking-tighter">
+            Grailify
+          </a>
+          <h2 className="mt-4 text-xl text-neutral-800">Welcome Back</h2>
+          <p className="mt-2 text-sm text-neutral-600">Sign in to continue to your account.</p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit} noValidate>
           <div className="rounded-md shadow-sm -space-y-px">
@@ -93,11 +95,11 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
-         <p className="mt-4 text-center text-sm text-neutral-600">
-            Don't have an account?{' '}
-            <a href="/signup" className="font-medium text-black hover:underline">
-                Sign up
-            </a>
+        <p className="mt-4 text-center text-sm text-neutral-600">
+          Don't have an account?{' '}
+          <a href="/signup" className="font-medium text-black hover:underline">
+            Sign up
+          </a>
         </p>
       </div>
     </div>

@@ -30,8 +30,10 @@ export default function SignUpPage() {
 
     setIsLoading(true);
 
-    try {
-      const response = await fetch('/api/signup', {
+    try { 
+      const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+      const response = await fetch(`${API_BASE}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -42,7 +44,7 @@ export default function SignUpPage() {
         throw new Error(errorData.message || 'Failed to create account');
       }
 
-      localStorage.setItem('authToken', 'dummy-token'); // Replace with actual token
+      localStorage.setItem('authToken', 'dummy-token'); 
       window.location.href = '/';
 
     } catch (err: any) {
