@@ -105,7 +105,6 @@ export default function CategoryPage() {
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const max = 5000;
 
-    // This useEffect will now re-fetch data whenever a filter changes.
     useEffect(() => {
         const fetchProducts = async () => {
             setIsLoading(true);
@@ -139,7 +138,6 @@ export default function CategoryPage() {
             }
         };
 
-        // Debounce the fetch call to avoid too many requests while sliding
         const debounceTimer = setTimeout(() => {
             fetchProducts();
         }, 500);
@@ -158,7 +156,6 @@ export default function CategoryPage() {
         if (category === 'electronics') {
             return ["Apple", "Sony", "Samsung", "Bose"];
         }
-        // Default brands for sneakers and other categories
         return ["Nike", "Adidas", "New Balance", "ASICS"];
     }, [category]);
 
@@ -187,7 +184,6 @@ export default function CategoryPage() {
                     </button>
                 </div>
 
-                {/* Mobile Filter Modal */}
                 <div className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ease-in-out ${isFilterOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                     <div onClick={() => setIsFilterOpen(false)} className="absolute inset-0 bg-black bg-opacity-50"></div>
                     <div className={`absolute top-0 right-0 h-full w-full max-w-sm bg-white p-6 transform transition-transform duration-300 ease-in-out ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -202,7 +198,6 @@ export default function CategoryPage() {
                 </div>
 
                 <div className="flex pt-2 lg:pt-8">
-                    {/* Desktop Filter Sidebar */}
                     <aside className="w-64 pr-8 hidden lg:block">
                         <h2 className="text-lg font-semibold mb-4">Filters</h2>
                         <FilterSidebar {...{ uniqueBrands, selectedBrands, handleBrandChange, minPrice, setMinPrice, maxPrice, setMaxPrice }} />
@@ -214,7 +209,6 @@ export default function CategoryPage() {
                         ) : error ? (
                              <div className="text-center text-red-500 py-20">Error: {error}</div>
                         ) : (
-                            // The page now directly renders the 'products' state from the API
                             products.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
                                     {products.map(product => <ProductCard key={product.id} {...product} />)}
