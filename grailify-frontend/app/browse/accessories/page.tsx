@@ -96,54 +96,43 @@ export default function CategoryPage() {
     const params = useParams();
     const category = Array.isArray(params.category) ? params.category[0] : params.category;
     
-    const [products, setProducts] = useState<any[]>([]);
+    const [allProducts, setAllProducts] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [minPrice, setMinPrice] = useState(0);
     const [maxPrice, setMaxPrice] = useState(5000);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
     const max = 5000;
 
     useEffect(() => {
-        const fetchProducts = async () => {
-            setIsLoading(true);
-            setError(null);
-            
-            const urlParams = new URLSearchParams();
-            if (category) {
-                urlParams.append('category', category);
-            }
-            urlParams.append('minPrice', minPrice.toString());
-            if (maxPrice < max) {
-                urlParams.append('maxPrice', maxPrice.toString());
-            }
-            if (selectedBrands.length > 0) {
-                urlParams.append('brands', selectedBrands.join(','));
-            }
+        setIsMounted(true);
+    }, []);
 
+    // Fetch all products for the category just once when the page loads.
+    useEffect(() => {
+        const fetchProducts = async () => {
+            if (!category) {
+                 setIsLoading(false);
+                 return;
+            };
+            setIsLoading(true);
             try {
-                const response = await fetch(`http://localhost:8080/api/items?${urlParams.toString()}`);
-                if (!response.ok) {
-                    throw new Error(`Network response was not ok, status: ${response.status}`);
-                }
+                const response = await fetch(`http://localhost:8080/api/items?category=${category}`);
+                if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
-                setProducts(data || []);
+                setAllProducts(data || []);
             } catch (err: any) {
-                console.error("ERROR: Failed to fetch products:", err);
+                console.error("Failed to fetch products:", err);
                 setError(err.message);
-                setProducts([]);
+                setAllProducts([]);
             } finally {
                 setIsLoading(false);
             }
         };
-
-        const debounceTimer = setTimeout(() => {
-            fetchProducts();
-        }, 500);
-
-        return () => clearTimeout(debounceTimer);
-    }, [category, minPrice, maxPrice, selectedBrands]); 
+        fetchProducts();
+    }, [category]);
 
 
     const handleBrandChange = (brand: string) => {
@@ -152,9 +141,20 @@ export default function CategoryPage() {
         );
     };
 
+    // This logic now correctly filters the products on the client-side
+    const filteredProducts = useMemo(() => {
+        if (!allProducts) return [];
+        return allProducts.filter(product => {
+            const priceCondition = product.price >= minPrice && (maxPrice === max ? true : product.price <= maxPrice);
+            const brandCondition = selectedBrands.length === 0 || selectedBrands.includes(product.brand);
+            return priceCondition && brandCondition;
+        });
+    }, [minPrice, maxPrice, selectedBrands, allProducts]);
+
     const uniqueBrands = useMemo(() => {
-        return ["Nike", "Adidas", "New Balance", "ASICS"];
-    }, []);
+        if (!allProducts) return [];
+        return [...new Set(allProducts.map(p => p.brand))];
+    }, [allProducts]);
 
     const categoryName = category ? (category as string).charAt(0).toUpperCase() + (category as string).slice(1) : 'Category';
 
@@ -181,6 +181,7 @@ export default function CategoryPage() {
                     </button>
                 </div>
 
+                {/* Mobile Filter Modal */}
                 <div className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ease-in-out ${isFilterOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                     <div onClick={() => setIsFilterOpen(false)} className="absolute inset-0 bg-black bg-opacity-50"></div>
                     <div className={`absolute top-0 right-0 h-full w-full max-w-sm bg-white p-6 transform transition-transform duration-300 ease-in-out ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -195,6 +196,7 @@ export default function CategoryPage() {
                 </div>
 
                 <div className="flex pt-2 lg:pt-8">
+                    {/* Desktop Filter Sidebar */}
                     <aside className="w-64 pr-8 hidden lg:block">
                         <h2 className="text-lg font-semibold mb-4">Filters</h2>
                         <FilterSidebar {...{ uniqueBrands, selectedBrands, handleBrandChange, minPrice, setMinPrice, maxPrice, setMaxPrice }} />
@@ -206,9 +208,10 @@ export default function CategoryPage() {
                         ) : error ? (
                              <div className="text-center text-red-500 py-20">Error: {error}</div>
                         ) : (
-                            products.length > 0 ? (
+                            // The page now renders the correctly filtered list
+                            filteredProducts.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
-                                    {products.map(product => <ProductCard key={product.id} {...product} />)}
+                                    {filteredProducts.map(product => <ProductCard key={product.id} {...product} />)}
                                 </div>
                             ) : (
                                 <p className="text-center text-neutral-500 py-20">No products found matching your criteria.</p>
