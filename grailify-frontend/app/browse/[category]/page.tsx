@@ -1,5 +1,4 @@
 "use client";
-
 import { useParams } from 'next/navigation';
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
@@ -22,6 +21,7 @@ const ProductCard = ({ id, name, brand, price, imageUrl }: { id: number; name:st
     <div className="aspect-square w-full bg-neutral-100 rounded-lg overflow-hidden">
       <img src={imageUrl || 'https://placehold.co/600x600/e0e0e0/333?text=No+Image'} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
     </div>
+
     <div className="mt-4">
       <p className="text-sm text-neutral-500">{brand}</p>
       <h3 className="mt-1 text-base font-medium text-black">{name}</h3>
@@ -47,11 +47,11 @@ const FilterSidebar = ({ uniqueBrands, selectedBrands, handleBrandChange, minPri
     }, [minPrice, maxPrice, getPercent]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <div>
-                <h3 className="font-medium mb-2">Brands</h3>
+                <h3 className="font-medium mb-4">Brands</h3>
                 <div className="space-y-2">
-                    {uniqueBrands.map((brand: string) => (
+                    {uniqueBrands.length > 0 ? uniqueBrands.map((brand: string) => (
                         <label key={brand} className="flex items-center">
                             <input 
                                 type="checkbox" 
@@ -59,31 +59,38 @@ const FilterSidebar = ({ uniqueBrands, selectedBrands, handleBrandChange, minPri
                                 checked={selectedBrands.includes(brand)}
                                 onChange={() => handleBrandChange(brand)}
                             />
-                            <span className="ml-2 text-sm text-neutral-700">{brand}</span>
+                            <span className="ml-3 text-sm text-neutral-700">{brand}</span>
                         </label>
-                    ))}
+                    )) : <p className="text-sm text-neutral-500">No brands available</p>}
                 </div>
             </div>
+
             <div>
                 <h3 className="font-medium mb-4">Price Range</h3>
-                <div className="relative h-10 flex items-center pt-4">
-                    <input
-                        type="range" min={min} max={max} value={minPrice}
-                        onChange={(event) => setMinPrice(Math.min(Number(event.target.value), maxPrice - 100))}
-                        className="thumb absolute w-full h-2 bg-transparent appearance-none z-20"
-                    />
-                    <input
-                        type="range" min={min} max={max} value={maxPrice}
-                        onChange={(event) => setMaxPrice(Math.max(Number(event.target.value), minPrice + 100))}
-                        className="thumb absolute w-full h-2 bg-transparent appearance-none z-20"
-                    />
-                    <div className="relative w-full z-10">
-                        <div className="absolute w-full rounded h-2 bg-neutral-200"></div>
-                        <div ref={range} className="absolute h-2 rounded bg-black"></div>
-                        <div className="absolute text-sm text-neutral-600 -bottom-7" style={{ left: `${getPercent(minPrice)}%`, transform: 'translateX(-50%)' }}>${minPrice}</div>
-                        <div className="absolute text-sm text-neutral-600 -bottom-7" style={{ left: `${getPercent(maxPrice)}%`, transform: 'translateX(-50%)' }}>
-                            {maxPrice === max ? `$${maxPrice.toLocaleString()}+` : `$${maxPrice.toLocaleString()}`}
+                <div className="relative flex items-center h-12">
+                    <div className="relative w-full">
+                        <input
+                            type="range" min={min} max={max} value={minPrice}
+                            step="10"
+                            onChange={(event) => setMinPrice(Math.min(Number(event.target.value), maxPrice - 100))}
+                            className="thumb absolute w-full h-2 bg-transparent appearance-none z-20"
+                        />
+                        <input
+                            type="range" min={min} max={max} value={maxPrice}
+                            step="10"
+                            onChange={(event) => setMaxPrice(Math.max(Number(event.target.value), minPrice + 100))}
+                            className="thumb absolute w-full h-2 bg-transparent appearance-none z-20"
+                        />
+                        <div className="relative z-10 h-2">
+                            <div className="absolute w-full rounded-md h-2 bg-neutral-200"></div>
+                            <div ref={range} className="absolute h-2 rounded-md bg-black"></div>
                         </div>
+                    </div>
+                </div>
+                <div className="flex justify-between items-center mt-4">
+                    <div className="text-sm text-neutral-600">${minPrice.toLocaleString('en-US')}</div>
+                    <div className="text-sm text-neutral-600">
+                      {maxPrice === max ? `$${maxPrice.toLocaleString('en-US')}+` : `$${maxPrice.toLocaleString('en-US')}`}
                     </div>
                 </div>
             </div>
@@ -94,8 +101,7 @@ const FilterSidebar = ({ uniqueBrands, selectedBrands, handleBrandChange, minPri
 
 export default function CategoryPage() {
     const params = useParams();
-    const category = Array.isArray(params.category) ? params.category[0] : params.category;
-    
+    const category = typeof params.category === 'string' ? params.category : '';
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -103,14 +109,8 @@ export default function CategoryPage() {
     const [maxPrice, setMaxPrice] = useState(5000);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [isMounted, setIsMounted] = useState(false);
     const max = 5000;
 
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    // Fetch all products for the category just once when the page loads.
     useEffect(() => {
         const fetchProducts = async () => {
             if (!category) {
@@ -118,8 +118,10 @@ export default function CategoryPage() {
                  return;
             };
             setIsLoading(true);
+            setError(null);
             try {
-                const response = await fetch(`http://localhost:8080/api/items?category=${category}`);
+                const queryParams = new URLSearchParams({ category });
+                const response = await fetch(`http://localhost:8080/api/items?${queryParams.toString()}`);
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
                 setAllProducts(data || []);
@@ -131,9 +133,10 @@ export default function CategoryPage() {
                 setIsLoading(false);
             }
         };
-        fetchProducts();
+        if (category) {
+            fetchProducts();
+        }
     }, [category]);
-
 
     const handleBrandChange = (brand: string) => {
         setSelectedBrands(prev => 
@@ -141,28 +144,31 @@ export default function CategoryPage() {
         );
     };
 
-    // This logic now correctly filters the products on the client-side
     const filteredProducts = useMemo(() => {
         if (!allProducts) return [];
         return allProducts.filter(product => {
             const priceCondition = product.price >= minPrice && (maxPrice === max ? true : product.price <= maxPrice);
-            const brandCondition = selectedBrands.length === 0 || selectedBrands.includes(product.brand);
+            const brandCondition = selectedBrands.length === 0 || (typeof product.brand === 'string' && selectedBrands.includes(product.brand));
             return priceCondition && brandCondition;
         });
     }, [minPrice, maxPrice, selectedBrands, allProducts]);
 
     const uniqueBrands = useMemo(() => {
         if (!allProducts) return [];
-        return [...new Set(allProducts.map(p => p.brand))];
+        const brands = new Set(allProducts.map(p => p.brand).filter(Boolean));
+        return [...brands];
     }, [allProducts]);
 
-    const categoryName = category ? (category as string).charAt(0).toUpperCase() + (category as string).slice(1) : 'Category';
+    const categoryName = category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Category';
 
     useEffect(() => {
         if (isFilterOpen) {
             document.body.style.overflow = 'hidden';
         } else {
             document.body.style.overflow = 'auto';
+        }
+        return () => {
+             document.body.style.overflow = 'auto';
         }
     }, [isFilterOpen]);
 
@@ -181,7 +187,6 @@ export default function CategoryPage() {
                     </button>
                 </div>
 
-                {/* Mobile Filter Modal */}
                 <div className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ease-in-out ${isFilterOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                     <div onClick={() => setIsFilterOpen(false)} className="absolute inset-0 bg-black bg-opacity-50"></div>
                     <div className={`absolute top-0 right-0 h-full w-full max-w-sm bg-white p-6 transform transition-transform duration-300 ease-in-out ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -196,19 +201,17 @@ export default function CategoryPage() {
                 </div>
 
                 <div className="flex pt-2 lg:pt-8">
-                    {/* Desktop Filter Sidebar */}
                     <aside className="w-64 pr-8 hidden lg:block">
-                        <h2 className="text-lg font-semibold mb-4">Filters</h2>
+                        <h2 className="text-lg font-semibold mb-6">Filters</h2>
                         <FilterSidebar {...{ uniqueBrands, selectedBrands, handleBrandChange, minPrice, setMinPrice, maxPrice, setMaxPrice }} />
                     </aside>
 
-                    <div className="flex-1">
+                    <main className="flex-1">
                         {isLoading ? (
                             <div className="text-center text-neutral-500 py-20">Loading products...</div>
                         ) : error ? (
                              <div className="text-center text-red-500 py-20">Error: {error}</div>
                         ) : (
-                            // The page now renders the correctly filtered list
                             filteredProducts.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
                                     {filteredProducts.map(product => <ProductCard key={product.id} {...product} />)}
@@ -217,7 +220,7 @@ export default function CategoryPage() {
                                 <p className="text-center text-neutral-500 py-20">No products found matching your criteria.</p>
                             )
                         )}
-                    </div>
+                    </main>
                 </div>
             </div>
         </div>

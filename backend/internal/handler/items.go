@@ -95,6 +95,40 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(items)
 }
 
+func (h *ItemsHandler) GetAllCategories(w http.ResponseWriter, r *http.Request) {
+	query := "SELECT id, name, slug FROM categories ORDER BY name ASC"
+	
+	rows, err := h.DB.Query(query)
+	if err != nil {
+		http.Error(w, "Failed to query database for categories", http.StatusInternalServerError)
+		log.Printf("Database query execution error for categories: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var categories []model.Category
+	for rows.Next() {
+		var category model.Category
+		if err := rows.Scan(&category.ID, &category.Name, &category.Slug); err != nil {
+			http.Error(w, "Failed to scan category row data", http.StatusInternalServerError)
+			log.Printf("Database scan error for category: %v", err)
+			return
+		}
+		categories = append(categories, category)
+	}
+
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error iterating through category rows", http.StatusInternalServerError)
+		log.Printf("Row iteration error for categories: %v", err)
+		return
+	}
+	
+	log.Printf("Found %d categories.\n", len(categories))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(categories)
+}
+
 func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
     itemIDStr := r.URL.Query().Get("id")
     itemID, err := strconv.Atoi(itemIDStr)

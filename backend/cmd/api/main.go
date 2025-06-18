@@ -41,6 +41,7 @@ func main() {
 	r := mux.NewRouter()
 	
 	log.Println("Registering API handlers...")
+	r.HandleFunc("/api/categories", itemsHandler.GetAllCategories).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/signup", authHandler.SignUp).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/login", authHandler.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/items", itemsHandler.GetAllItems).Methods("GET", "OPTIONS")

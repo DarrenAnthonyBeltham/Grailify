@@ -16,7 +16,7 @@ type Item struct {
 	Price       float64   `json:"price"`
 	CategoryID  int       `json:"category_id"`
 	ReleaseDate time.Time `json:"release_date"`
-	ImageURL    string    `json:"image_url"`
+	ImageURL    string    `json:"imageUrl"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

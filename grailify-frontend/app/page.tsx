@@ -34,6 +34,8 @@ const CategoryCard = ({ name, imageUrl, href }: { name: string; imageUrl: string
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
   useEffect(() => {
     const checkAuth = () => {
@@ -41,6 +43,23 @@ export default function HomePage() {
       setIsLoggedIn(!!token);
     };
     checkAuth();
+
+    const fetchCategories = async () => {
+        try {
+            const response = await fetch('http://localhost:8080/api/categories');
+            if (!response.ok) {
+                throw new Error('Failed to fetch categories');
+            }
+            const data = await response.json();
+            setCategories(data || []);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoadingCategories(false);
+        }
+    };
+
+    fetchCategories();
   }, []);
 
   const trendingProducts = [
@@ -59,7 +78,7 @@ export default function HomePage() {
               <h1 className="text-4xl md:text-6xl font-extrabold text-black tracking-tighter">Welcome Back to Grailify</h1>
               <p className="mt-4 max-w-2xl mx-auto text-lg text-neutral-600">You're ready to buy and sell. What will you find today?</p>
               <div className="mt-8 flex justify-center space-x-4">
-                <a href="/browse" className="bg-black text-white px-8 py-3 rounded-full font-medium hover:bg-neutral-800 transition-colors">Browse Grails</a>
+                <a href="/browse/all" className="bg-black text-white px-8 py-3 rounded-full font-medium hover:bg-neutral-800 transition-colors">Browse Grails</a>
                 <a href="/sell" className="bg-white text-black border border-neutral-300 px-8 py-3 rounded-full font-medium hover:bg-neutral-100 transition-colors">Start Selling</a>
               </div>
             </>
@@ -89,12 +108,18 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <h2 className="text-3xl font-bold text-center text-black tracking-tight">Browse by Category</h2>
           <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            <CategoryCard name="Sneakers" href="/browse/sneakers" imageUrl="https://placehold.co/800x600/e0e0e0/333?text=Sneakers" />
-            <CategoryCard name="Apparel" href="/browse/apparel" imageUrl="https://placehold.co/800x600/e0e0e0/333?text=Apparel" />
-            <CategoryCard name="Electronics" href="/browse/electronics" imageUrl="https://placehold.co/800x600/e0e0e0/333?text=Electronics" />
-            <CategoryCard name="Watches" href="/browse/watches" imageUrl="https://placehold.co/800x600/e0e0e0/333?text=Watches" />
-            <CategoryCard name="Accessories" href="/browse/accessories" imageUrl="https://placehold.co/800x600/e0e0e0/333?text=Accessories" />
-            <CategoryCard name="More Categories" href="/browse/morecategories" imageUrl="https://placehold.co/800x600/e0e0e0/333?text=More Categories" />
+            {isLoadingCategories ? (
+                <p className="col-span-full text-center text-neutral-500">Loading categories...</p>
+            ) : (
+                categories.map(category => (
+                    <CategoryCard 
+                        key={category.id}
+                        name={category.name}
+                        href={`/browse/${category.slug}`}
+                        imageUrl={`https://placehold.co/800x600/e0e0e0/333?text=${category.name}`}
+                    />
+                ))
+            )}
           </div>
         </div>
       </section>
