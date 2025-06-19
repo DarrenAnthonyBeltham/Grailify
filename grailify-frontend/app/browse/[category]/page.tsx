@@ -16,12 +16,25 @@ const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
     </svg>
 )
 
-const ProductCard = ({ id, name, brand, price, imageUrl }: { id: number; name:string; brand: string; price: number; imageUrl: string }) => (
-  <Link href={`/item/${id}`} className="group">
-    <div className="aspect-square w-full bg-neutral-100 rounded-lg overflow-hidden">
-      <img src={imageUrl || 'https://placehold.co/600x600/e0e0e0/333?text=No+Image'} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-    </div>
+interface Product {
+    id: number;
+    name: string;
+    brand: string;
+    price: number;
+    imageUrl: string;
+}
 
+interface PaginatedResponse {
+    items: Product[];
+    totalPages: number;
+    page: number;
+}
+
+const ProductCard = ({ id, name, brand, price, imageUrl }: Product) => (
+  <Link href={`/item/${id}`} className="group">
+    <div className="aspect-square w-full bg-white rounded-lg overflow-hidden border border-neutral-200">
+      <img src={imageUrl || 'https://placehold.co/600x600/e0e0e0/333?text=No+Image'} alt={name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300" />
+    </div>
     <div className="mt-4">
       <p className="text-sm text-neutral-500">{brand}</p>
       <h3 className="mt-1 text-base font-medium text-black">{name}</h3>
@@ -64,7 +77,6 @@ const FilterSidebar = ({ uniqueBrands, selectedBrands, handleBrandChange, minPri
                     )) : <p className="text-sm text-neutral-500">No brands available</p>}
                 </div>
             </div>
-
             <div>
                 <h3 className="font-medium mb-4">Price Range</h3>
                 <div className="relative flex items-center h-12">
@@ -98,45 +110,58 @@ const FilterSidebar = ({ uniqueBrands, selectedBrands, handleBrandChange, minPri
     );
 };
 
-
 export default function CategoryPage() {
     const params = useParams();
     const category = typeof params.category === 'string' ? params.category : '';
-    const [allProducts, setAllProducts] = useState<any[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [uniqueBrands, setUniqueBrands] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [minPrice, setMinPrice] = useState(0);
     const [maxPrice, setMaxPrice] = useState(5000);
     const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(0);
     const max = 5000;
 
     useEffect(() => {
+        if (!category) {
+            setIsLoading(false);
+            return;
+        }
+
         const fetchProducts = async () => {
-            if (!category) {
-                 setIsLoading(false);
-                 return;
-            };
             setIsLoading(true);
             setError(null);
             try {
-                const queryParams = new URLSearchParams({ category });
+                const queryParams = new URLSearchParams({ category, page: currentPage.toString() });
                 const response = await fetch(`http://localhost:8080/api/items?${queryParams.toString()}`);
+                
                 if (!response.ok) throw new Error('Network response was not ok');
-                const data = await response.json();
-                setAllProducts(data || []);
+
+                // --- Tell TypeScript what shape the data has ---
+                const data: PaginatedResponse = await response.json();
+                
+                setProducts(data.items || []);
+                setTotalPages(data.totalPages || 0);
+
+                if (currentPage === 1 && selectedBrands.length === 0 && minPrice === 0 && maxPrice === 5000) {
+                     const brands = new Set(data.items.map(p => p.brand).filter(Boolean));
+                     setUniqueBrands(Array.from(brands));
+                }
+
             } catch (err: any) {
                 console.error("Failed to fetch products:", err);
                 setError(err.message);
-                setAllProducts([]);
+                setProducts([]);
             } finally {
                 setIsLoading(false);
             }
         };
-        if (category) {
-            fetchProducts();
-        }
-    }, [category]);
+        
+        fetchProducts();
+    }, [category, currentPage]);
 
     const handleBrandChange = (brand: string) => {
         setSelectedBrands(prev => 
@@ -145,32 +170,56 @@ export default function CategoryPage() {
     };
 
     const filteredProducts = useMemo(() => {
-        if (!allProducts) return [];
-        return allProducts.filter(product => {
+        return products.filter(product => {
             const priceCondition = product.price >= minPrice && (maxPrice === max ? true : product.price <= maxPrice);
             const brandCondition = selectedBrands.length === 0 || (typeof product.brand === 'string' && selectedBrands.includes(product.brand));
             return priceCondition && brandCondition;
         });
-    }, [minPrice, maxPrice, selectedBrands, allProducts]);
+    }, [minPrice, maxPrice, selectedBrands, products]);
 
-    const uniqueBrands = useMemo(() => {
-        if (!allProducts) return [];
-        const brands = new Set(allProducts.map(p => p.brand).filter(Boolean));
-        return [...brands];
-    }, [allProducts]);
-
-    const categoryName = category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Category';
+    const categoryName = category ? (category.charAt(0).toUpperCase() + category.slice(1)).replace(/([A-Z])/g, ' $1').trim() : 'Category';
 
     useEffect(() => {
-        if (isFilterOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'auto';
-        }
-        return () => {
-             document.body.style.overflow = 'auto';
-        }
+        if (isFilterOpen) document.body.style.overflow = 'hidden';
+        else document.body.style.overflow = 'auto';
+        return () => { document.body.style.overflow = 'auto'; }
     }, [isFilterOpen]);
+
+    const PaginationControls = () => (
+        <div className="flex items-center justify-center space-x-4 mt-16">
+            <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1 || isLoading}
+                className="px-4 py-2 text-sm font-medium border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                First
+            </button>
+            <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1 || isLoading}
+                className="px-4 py-2 text-sm font-medium border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Previous
+            </button>
+            <span className="text-sm text-neutral-600">
+                Page {currentPage} of {totalPages}
+            </span>
+            <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || isLoading}
+                className="px-4 py-2 text-sm font-medium border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Next
+            </button>
+             <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || isLoading}
+                className="px-4 py-2 text-sm font-medium border rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                Last
+            </button>
+        </div>
+    );
 
     return (
         <div className="bg-white">
@@ -212,13 +261,16 @@ export default function CategoryPage() {
                         ) : error ? (
                              <div className="text-center text-red-500 py-20">Error: {error}</div>
                         ) : (
-                            filteredProducts.length > 0 ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
-                                    {filteredProducts.map(product => <ProductCard key={product.id} {...product} />)}
-                                </div>
-                            ) : (
-                                <p className="text-center text-neutral-500 py-20">No products found matching your criteria.</p>
-                            )
+                            <>
+                                {filteredProducts.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-12">
+                                        {filteredProducts.map(product => <ProductCard key={product.id} {...product} />)}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-neutral-500 py-20">No products found matching your criteria.</p>
+                                )}
+                                {totalPages > 1 && <PaginationControls />}
+                            </>
                         )}
                     </main>
                 </div>

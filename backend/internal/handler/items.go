@@ -15,6 +15,12 @@ type ItemsHandler struct {
 	DB *sql.DB
 }
 
+type PaginatedResponse struct {
+	Items      []model.Item `json:"items"`
+	TotalPages int          `json:"totalPages"`
+	Page       int          `json:"page"`
+}
+
 func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	categorySlug := params.Get("category")
@@ -22,23 +28,28 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	maxPriceStr := params.Get("maxPrice")
 	brandsStr := params.Get("brands")
 
-	query := `
-        SELECT i.id, i.name, i.description, i.brand, i.price, i.image_url, i.created_at
-        FROM items i
-        LEFT JOIN categories c ON i.category_id = c.id
-        WHERE 1=1
-    `
+	page, err := strconv.Atoi(params.Get("page"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+	limit := 50
+
+	countQuery := "SELECT COUNT(DISTINCT i.id) FROM items i LEFT JOIN categories c ON i.category_id = c.id"
+	dataQuery := "SELECT DISTINCT i.id, i.name, i.description, i.brand, i.price, i.image_url, i.created_at FROM items i LEFT JOIN categories c ON i.category_id = c.id"
+	
+	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
-	if categorySlug != "" && categorySlug != "all" {
-		query += " AND LOWER(c.slug) = ?"
+	if categorySlug != "" && categorySlug != "all" && categorySlug != "allgrails" && categorySlug != "morecategories" {
+		whereClauses = append(whereClauses, "LOWER(c.slug) = ?")
 		args = append(args, strings.ToLower(categorySlug))
 	}
 
 	if brandsStr != "" {
 		brands := strings.Split(brandsStr, ",")
 		if len(brands) > 0 {
-			query += " AND LOWER(i.brand) IN (?" + strings.Repeat(",?", len(brands)-1) + ")"
+			placeholders := "?" + strings.Repeat(",?", len(brands)-1)
+			whereClauses = append(whereClauses, "LOWER(i.brand) IN ("+placeholders+")")
 			for _, brand := range brands {
 				args = append(args, strings.ToLower(brand))
 			}
@@ -46,28 +57,43 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if minPrice, err := strconv.ParseFloat(minPriceStr, 64); err == nil {
-		query += " AND i.price >= ?"
+		whereClauses = append(whereClauses, "i.price >= ?")
 		args = append(args, minPrice)
 	}
 
 	if maxPrice, err := strconv.ParseFloat(maxPriceStr, 64); err == nil {
 		if maxPrice > 0 && maxPrice < 5000 {
-			query += " AND i.price <= ?"
+			whereClauses = append(whereClauses, "i.price <= ?")
 			args = append(args, maxPrice)
 		}
 	}
 
-	query += " ORDER BY i.created_at DESC LIMIT 40"
-	
-	log.Println("--- Executing Query ---")
-	log.Println(query)
-	log.Println(args)
+	whereStr := " WHERE " + strings.Join(whereClauses, " AND ")
+	countQuery += whereStr
+	dataQuery += whereStr
+
+	var totalItems int
+	err = h.DB.QueryRow(countQuery, args...).Scan(&totalItems)
+	if err != nil {
+		http.Error(w, "Failed to count items", http.StatusInternalServerError)
+		log.Printf("Database count query error: %v. Query: %s", err, countQuery)
+		return
+	}
+	totalPages := (totalItems + limit - 1) / limit
+
+	offset := (page - 1) * limit
+	dataQuery += " ORDER BY RAND() LIMIT ? OFFSET ?"
+	finalArgs := append(args, limit, offset)
+
+	log.Println("--- Executing Data Query ---")
+	log.Println(dataQuery)
+	log.Println(finalArgs)
 	log.Println("-----------------------")
 
-	rows, err := h.DB.Query(query, args...)
+	rows, err := h.DB.Query(dataQuery, finalArgs...)
 	if err != nil {
 		http.Error(w, "Failed to query database", http.StatusInternalServerError)
-		log.Printf("Database query execution error: %v", err)
+		log.Printf("Database data query error: %v. Query: %s", err, dataQuery)
 		return
 	}
 	defer rows.Close()
@@ -88,11 +114,15 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Row iteration error: %v", err)
 		return
 	}
-	
-	log.Printf("Found %d products matching criteria.\n", len(items))
+
+	response := PaginatedResponse{
+		Items:      items,
+		TotalPages: totalPages,
+		Page:       page,
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(items)
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *ItemsHandler) GetAllCategories(w http.ResponseWriter, r *http.Request) {
