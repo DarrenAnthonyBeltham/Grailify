@@ -21,6 +21,57 @@ type PaginatedResponse struct {
 	Page       int          `json:"page"`
 }
 
+type ItemDetailResponse struct {
+	model.Item
+	PriceHistory []model.PriceHistory `json:"priceHistory"`
+}
+
+type SearchResult struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Brand    string `json:"brand"`
+	ImageURL string `json:"imageUrl"`
+}
+
+func (h *ItemsHandler) SearchItems(w http.ResponseWriter, r *http.Request) {
+	queryValues := r.URL.Query()
+	searchTerm := queryValues.Get("q")
+
+	if searchTerm == "" {
+		json.NewEncoder(w).Encode([]SearchResult{})
+		return
+	}
+
+	query := `
+        SELECT id, name, brand, image_url FROM items
+        WHERE name LIKE ? OR brand LIKE ?
+        LIMIT 10
+    `
+
+	args := []interface{}{"%" + searchTerm + "%", "%" + searchTerm + "%"}
+
+	rows, err := h.DB.Query(query, args...)
+	if err != nil {
+		http.Error(w, "Database query failed", http.StatusInternalServerError)
+		log.Printf("Search query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var results []SearchResult
+	for rows.Next() {
+		var item SearchResult
+		if err := rows.Scan(&item.ID, &item.Name, &item.Brand, &item.ImageURL); err != nil {
+			http.Error(w, "Failed to scan search result", http.StatusInternalServerError)
+			return
+		}
+		results = append(results, item)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
 func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	categorySlug := params.Get("category")
@@ -161,14 +212,63 @@ func (h *ItemsHandler) GetAllCategories(w http.ResponseWriter, r *http.Request) 
 
 func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
     itemIDStr := r.URL.Query().Get("id")
+    if itemIDStr == "" {
+        http.Error(w, "Item ID is required", http.StatusBadRequest)
+        return
+    }
     itemID, err := strconv.Atoi(itemIDStr)
     if err != nil {
         http.Error(w, "Invalid item ID", http.StatusBadRequest)
         return
     }
 
-    log.Printf("Fetching item with ID: %d", itemID)
+    log.Printf("Fetching details for item with ID: %d", itemID)
+
+    var item model.Item
+	var releaseDate sql.NullTime 
+    itemQuery := "SELECT id, name, description, brand, price, release_date, image_url, created_at FROM items WHERE id = ?"
+    err = h.DB.QueryRow(itemQuery, itemID).Scan(
+        &item.ID, &item.Name, &item.Description, &item.Brand, &item.Price, &releaseDate, &item.ImageURL, &item.CreatedAt,
+    )
+    if err != nil {
+        if err == sql.ErrNoRows {
+            http.Error(w, "Item not found", http.StatusNotFound)
+        } else {
+            http.Error(w, "Failed to query item details", http.StatusInternalServerError)
+        }
+        log.Printf("Database query error for item details: %v", err)
+        return
+    }
+
+	if releaseDate.Valid {
+		item.ReleaseDate = releaseDate.Time
+	}
+
+    var priceHistory []model.PriceHistory
+    historyQuery := "SELECT id, item_id, price, type, recorded_at FROM price_history WHERE item_id = ? ORDER BY recorded_at ASC"
+    rows, err := h.DB.Query(historyQuery, itemID)
+    if err != nil {
+        http.Error(w, "Failed to query price history", http.StatusInternalServerError)
+        log.Printf("Database query error for price history: %v", err)
+        return
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        var historyPoint model.PriceHistory
+        if err := rows.Scan(&historyPoint.ID, &historyPoint.ItemID, &historyPoint.Price, &historyPoint.Type, &historyPoint.RecordedAt); err != nil {
+            http.Error(w, "Failed to scan price history row", http.StatusInternalServerError)
+            log.Printf("Database scan error for price history: %v", err)
+            return
+        }
+        priceHistory = append(priceHistory, historyPoint)
+    }
+
+    response := ItemDetailResponse{
+        Item:         item,
+        PriceHistory: priceHistory,
+    }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]string{"message": "Item details endpoint"})
+    json.NewEncoder(w).Encode(response)
 }

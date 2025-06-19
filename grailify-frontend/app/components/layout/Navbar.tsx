@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+
+interface SearchResult {
+  id: number;
+  name: string;
+  brand: string;
+  imageUrl: string;
+}
 
 const NavLink = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <Link href={href} className="text-sm font-medium text-neutral-600 hover:text-black transition-colors">
@@ -16,19 +23,68 @@ const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+function useDebounce(value: string, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const debouncedSearchQuery = useDebounce(searchQuery, 300); // 300ms delay
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     setIsLoggedIn(!!token);
   }, []);
 
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      const fetchResults = async () => {
+        const response = await fetch(`http://localhost:8080/api/search?q=${debouncedSearchQuery}`);
+        const data: SearchResult[] = await response.json();
+        setResults(data);
+      };
+      fetchResults();
+    } else {
+      setResults([]);
+    }
+  }, [debouncedSearchQuery]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setIsSearchFocused(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [searchContainerRef]);
+
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     setIsLoggedIn(false);
     window.location.href = '/';
   };
+
+  const closeSearch = () => {
+    setSearchQuery('');
+    setResults([]);
+    setIsSearchFocused(false);
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-neutral-200">
@@ -46,17 +102,42 @@ export default function Navbar() {
             </nav>
           </div>
 
-          <div className="flex-1 max-w-md mx-8 hidden lg:block">
+          <div ref={searchContainerRef} className="flex-1 max-w-md mx-8 hidden lg:block relative">
             <div className="relative">
                <input
                 type="search"
                 placeholder="Search for your Grail..."
                 className="w-full h-10 pl-10 pr-4 rounded-full border border-neutral-300 bg-neutral-100/80 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
                />
                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                  <SearchIcon className="h-5 w-5 text-neutral-500" />
                </div>
             </div>
+
+            {isSearchFocused && results.length > 0 && (
+              <div className="absolute top-full mt-2 w-full bg-white border border-neutral-200 rounded-lg shadow-lg overflow-hidden">
+                <ul className="divide-y divide-neutral-100">
+                  {results.map((item) => (
+                    <li key={item.id}>
+                      <Link 
+                        href={`/item/${item.id}`} 
+                        onClick={closeSearch}
+                        className="flex items-center p-3 hover:bg-neutral-50"
+                      >
+                        <img src={item.imageUrl} alt={item.name} className="w-12 h-12 object-contain rounded-md bg-neutral-100" />
+                        <div className="ml-4">
+                          <p className="text-sm font-medium text-black">{item.name}</p>
+                          <p className="text-xs text-neutral-500">{item.brand}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-4">

@@ -42,9 +42,11 @@ func main() {
 	
 	log.Println("Registering API handlers...")
 	r.HandleFunc("/api/categories", itemsHandler.GetAllCategories).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/item", itemsHandler.GetItemByID).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/signup", authHandler.SignUp).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/login", authHandler.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/items", itemsHandler.GetAllItems).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/search", itemsHandler.SearchItems).Methods("GET", "OPTIONS")
 	log.Println("API handlers registered successfully.")
 
 	handler := corsMiddleware(r)
