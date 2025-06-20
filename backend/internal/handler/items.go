@@ -21,9 +21,17 @@ type PaginatedResponse struct {
 	Page       int          `json:"page"`
 }
 
+type InventoryInfo struct {
+	InventoryID int     `json:"inventoryId"`
+	Size        string  `json:"size"`
+	Price       float64 `json:"price"`
+	Stock       int     `json:"stock"`
+}
+
 type ItemDetailResponse struct {
 	model.Item
 	PriceHistory []model.PriceHistory `json:"priceHistory"`
+	Inventory []InventoryInfo `json:"inventory"`
 }
 
 type SearchResult struct {
@@ -31,6 +39,47 @@ type SearchResult struct {
 	Name     string `json:"name"`
 	Brand    string `json:"brand"`
 	ImageURL string `json:"imageUrl"`
+}
+
+func (h *ItemsHandler) RecordSale(w http.ResponseWriter, r *http.Request) {
+    var requestBody struct {
+        ItemID int `json:"itemId"`
+    }
+
+    err := json.NewDecoder(r.Body).Decode(&requestBody)
+    if err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    if requestBody.ItemID <= 0 {
+        http.Error(w, "Invalid item ID", http.StatusBadRequest)
+        return
+    }
+
+    query := "UPDATE items SET items_sold = items_sold + 1 WHERE id = ?"
+    
+    result, err := h.DB.Exec(query, requestBody.ItemID)
+    if err != nil {
+        http.Error(w, "Database update failed", http.StatusInternalServerError)
+        log.Printf("Failed to execute RecordSale update: %v", err)
+        return
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        http.Error(w, "Failed to get rows affected", http.StatusInternalServerError)
+        return
+    }
+
+    if rowsAffected == 0 {
+        http.Error(w, "Item not found, no sale recorded", http.StatusNotFound)
+        return
+    }
+
+    log.Printf("Recorded sale for item ID: %d", requestBody.ItemID)
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Sale recorded successfully"})
 }
 
 func (h *ItemsHandler) SearchItems(w http.ResponseWriter, r *http.Request) {
@@ -225,10 +274,10 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
     log.Printf("Fetching details for item with ID: %d", itemID)
 
     var item model.Item
-	var releaseDate sql.NullTime 
-    itemQuery := "SELECT id, name, description, brand, price, release_date, image_url, created_at FROM items WHERE id = ?"
+    var releaseDate sql.NullTime
+    itemQuery := "SELECT id, name, description, brand, price, items_sold, category_id, release_date, image_url, created_at FROM items WHERE id = ?"
     err = h.DB.QueryRow(itemQuery, itemID).Scan(
-        &item.ID, &item.Name, &item.Description, &item.Brand, &item.Price, &releaseDate, &item.ImageURL, &item.CreatedAt,
+        &item.ID, &item.Name, &item.Description, &item.Brand, &item.Price, &item.ItemsSold, &item.CategoryID, &releaseDate, &item.ImageURL, &item.CreatedAt,
     )
     if err != nil {
         if err == sql.ErrNoRows {
@@ -239,26 +288,47 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
         log.Printf("Database query error for item details: %v", err)
         return
     }
+    if releaseDate.Valid {
+        item.ReleaseDate = releaseDate.Time
+    }
 
-	if releaseDate.Valid {
-		item.ReleaseDate = releaseDate.Time
-	}
+    var inventory []InventoryInfo
+    inventoryQuery := `
+        SELECT ii.id, s.size_value, ii.price, ii.stock 
+        FROM item_inventory ii
+        JOIN sizes s ON ii.size_id = s.id
+        WHERE ii.item_id = ?
+        ORDER BY s.id
+    `
+    invRows, err := h.DB.Query(inventoryQuery, itemID)
+    if err != nil {
+        http.Error(w, "Failed to query inventory", http.StatusInternalServerError)
+        return
+    }
+    defer invRows.Close()
+
+    for invRows.Next() {
+        var invItem InventoryInfo
+        if err := invRows.Scan(&invItem.InventoryID, &invItem.Size, &invItem.Price, &invItem.Stock); err != nil {
+            http.Error(w, "Failed to scan inventory row", http.StatusInternalServerError)
+            return
+        }
+        inventory = append(inventory, invItem)
+    }
 
     var priceHistory []model.PriceHistory
     historyQuery := "SELECT id, item_id, price, type, recorded_at FROM price_history WHERE item_id = ? ORDER BY recorded_at ASC"
-    rows, err := h.DB.Query(historyQuery, itemID)
+    histRows, err := h.DB.Query(historyQuery, itemID)
     if err != nil {
         http.Error(w, "Failed to query price history", http.StatusInternalServerError)
-        log.Printf("Database query error for price history: %v", err)
         return
     }
-    defer rows.Close()
+    defer histRows.Close()
 
-    for rows.Next() {
+    for histRows.Next() {
         var historyPoint model.PriceHistory
-        if err := rows.Scan(&historyPoint.ID, &historyPoint.ItemID, &historyPoint.Price, &historyPoint.Type, &historyPoint.RecordedAt); err != nil {
+        if err := histRows.Scan(&historyPoint.ID, &historyPoint.ItemID, &historyPoint.Price, &historyPoint.Type, &historyPoint.RecordedAt); err != nil {
             http.Error(w, "Failed to scan price history row", http.StatusInternalServerError)
-            log.Printf("Database scan error for price history: %v", err)
             return
         }
         priceHistory = append(priceHistory, historyPoint)
@@ -266,6 +336,7 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
     response := ItemDetailResponse{
         Item:         item,
+        Inventory:    inventory,
         PriceHistory: priceHistory,
     }
 
