@@ -139,8 +139,6 @@ export default function CategoryPage() {
                 const response = await fetch(`http://localhost:8080/api/items?${queryParams.toString()}`);
                 
                 if (!response.ok) throw new Error('Network response was not ok');
-
-                // --- Tell TypeScript what shape the data has ---
                 const data: PaginatedResponse = await response.json();
                 
                 setProducts(data.items || []);

@@ -41,7 +41,7 @@ export default function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const debouncedSearchQuery = useDebounce(searchQuery, 300); // 300ms delay
+  const debouncedSearchQuery = useDebounce(searchQuery, 300); 
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

@@ -8,19 +8,16 @@ export default function CheckoutPage() {
     const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
 
     useEffect(() => {
-        // --- Authentication Check ---
         const token = localStorage.getItem('authToken');
         if (!token) {
-            // If no token, redirect to login page after a short delay
             setTimeout(() => {
                 router.push('/login');
-            }, 2000); // 2-second delay to show the message
+            }, 2000); 
         } else {
             setIsLoggedIn(true);
         }
     }, [router]);
 
-    // Show a loading or redirection message until the check is complete
     if (isLoggedIn === null || !isLoggedIn) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-white">
@@ -30,16 +27,13 @@ export default function CheckoutPage() {
         );
     }
 
-    // --- Main Checkout Page Content ---
     return (
         <div className="bg-white">
             <div className="container mx-auto px-4 py-12 lg:py-24">
                 <h1 className="text-4xl font-bold text-center text-black tracking-tight mb-12">Checkout</h1>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-16">
                     
-                    {/* Left Column: Shipping and Payment */}
                     <div className="lg:col-span-2 space-y-8">
-                        {/* Shipping Address */}
                         <div className="border border-neutral-200 rounded-lg p-6">
                             <h2 className="text-xl font-semibold mb-4">Shipping Address</h2>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -53,7 +47,6 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        {/* Payment Method */}
                         <div className="border border-neutral-200 rounded-lg p-6">
                             <h2 className="text-xl font-semibold mb-4">Payment Method</h2>
                             <div className="space-y-4">
@@ -66,7 +59,6 @@ export default function CheckoutPage() {
                         </div>
                     </div>
 
-                    {/* Right Column: Order Summary */}
                     <div className="border border-neutral-200 rounded-lg p-6 h-fit">
                         <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
                         <div className="space-y-4">
