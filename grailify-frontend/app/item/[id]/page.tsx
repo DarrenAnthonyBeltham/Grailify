@@ -4,13 +4,13 @@ import { useParams, useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 
+// Interfaces (no changes)
 interface InventoryInfo {
     inventoryId: number;
     size: string;
     price: number;
     stock: number;
 }
-
 interface PriceHistoryEntry {
     id: number;
     item_id: number;
@@ -18,7 +18,6 @@ interface PriceHistoryEntry {
     type: string;
     recorded_at: string;
 }
-
 interface ItemDetail {
     id: number;
     name: string;
@@ -30,8 +29,8 @@ interface ItemDetail {
     release_date: string;
     imageUrl: string;
     created_at: string;
+    inventory: InventoryInfo[];
     priceHistory: PriceHistoryEntry[];
-    inventory: InventoryInfo[]; 
 }
 
 const BackIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -122,27 +121,31 @@ export default function ItemPage() {
     const [filteredPriceHistory, setFilteredPriceHistory] = useState<PriceHistoryEntry[]>([]);
     const [selectedInventoryId, setSelectedInventoryId] = useState<number | null>(null);
 
-    useEffect(() => {
+    const fetchItemData = async () => {
         if (!id) return;
-        const fetchItemData = async () => {
-            setIsLoading(true);
-            try {
-                const response = await fetch(`http://localhost:8080/api/item?id=${id}`);
-                if (!response.ok) throw new Error(`Item not found (${response.status})`);
-                const data: ItemDetail = await response.json();
-                setItem(data);
-                setFilteredPriceHistory(data.priceHistory || []);
-                if (data.inventory && data.inventory.length > 0) {
-                    setSelectedInventoryId(data.inventory[0].inventoryId);
-                }
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
+        setIsLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(`http://localhost:8080/api/item?id=${id}`);
+            if (!response.ok) {
+                throw new Error(`Item not found or network error (${response.status})`);
             }
-        };
+            const data: ItemDetail = await response.json();
+            setItem(data);
+            setFilteredPriceHistory(data.priceHistory || []);
+            if (data.inventory && data.inventory.length > 0) {
+                setSelectedInventoryId(data.inventory[0].inventoryId);
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchItemData();
-    }, [id]);
+    }, [id]); 
 
     useEffect(() => {
         if (!item || !item.priceHistory) {
@@ -172,17 +175,17 @@ export default function ItemPage() {
         return new Date(item.release_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     }, [item]);
     
-    const selectedInventoryItem = useMemo(() => {
-        if (!item || !selectedInventoryId) return null;
-        return item.inventory.find(inv => inv.inventoryId === selectedInventoryId);
-    }, [item, selectedInventoryId]);
-
-    const displayedPrice = selectedInventoryItem ? selectedInventoryItem.price : item?.price;
-
     const lastSale = useMemo(() => {
         if (!filteredPriceHistory || filteredPriceHistory.length === 0) return null;
         return filteredPriceHistory[filteredPriceHistory.length - 1].price;
     }, [filteredPriceHistory]);
+
+    // --- THIS IS THE FIX ---
+    // The price displayed is now the last sale price if available, otherwise it falls back to the retail price.
+    const displayedPrice = useMemo(() => {
+        return lastSale ?? item?.price;
+    }, [lastSale, item]);
+    // --- END OF FIX ---
 
     const pricePremium = useMemo(() => {
         if (!lastSale || !item?.price || item.price === 0) return null;
@@ -190,16 +193,32 @@ export default function ItemPage() {
         return `${premium > 0 ? '+' : ''}${premium.toFixed(0)}%`;
     }, [lastSale, item]);
 
+
     const handleAddToCart = () => {
-        if (!item || !selectedInventoryItem) {
+        if (!item) return;
+
+        // For items without sizes (like watches), create a default cart item.
+        const selectedInventoryItem = item.inventory?.find(inv => inv.inventoryId === selectedInventoryId);
+        
+        if (item.inventory && item.inventory.length > 0 && !selectedInventoryItem) {
             alert('Please select a size first.');
             return;
         }
-        const cartItem = { id: item.id, inventoryId: selectedInventoryItem.inventoryId, name: item.name, brand: item.brand, size: selectedInventoryItem.size, price: selectedInventoryItem.price, imageUrl: item.imageUrl };
+
+        const cartItem = { 
+            id: item.id, 
+            inventoryId: selectedInventoryItem ? selectedInventoryItem.inventoryId : item.id, // Use item.id as a fallback
+            name: item.name, 
+            brand: item.brand, 
+            size: selectedInventoryItem ? selectedInventoryItem.size : 'One Size', 
+            price: displayedPrice, // Use the dynamically displayed price
+            imageUrl: item.imageUrl 
+        };
+
         const existingCart = JSON.parse(localStorage.getItem('grailifyCart') || '[]');
         existingCart.push(cartItem);
         localStorage.setItem('grailifyCart', JSON.stringify(existingCart));
-        alert(`${item.name} (${selectedInventoryItem.size}) has been added to your cart.`);
+        alert(`${item.name} (${cartItem.size}) has been added to your cart.`);
         router.push('/cart');
     };
 
@@ -229,7 +248,6 @@ export default function ItemPage() {
                             <p className="text-2xl font-bold text-black">${displayedPrice?.toFixed(2)}</p>
                         </div>
                         
-                        {/* --- FIX: Use `category_id` to show size selector --- */}
                         {(item.category_id === 1 || item.category_id === 2) && (
                             <div className="mt-6">
                                 <h3 className="text-sm font-medium text-neutral-700 mb-2">Select Size</h3>
@@ -273,7 +291,6 @@ export default function ItemPage() {
                         </div>
                     </div>
                      <div className="mt-6">
-                        {/* --- FIX: Use `recorded_at` for chart mapping --- */}
                         <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
                     </div>
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
