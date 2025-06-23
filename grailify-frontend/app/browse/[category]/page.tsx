@@ -11,9 +11,9 @@ const FilterIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 const CloseIcon = (props: React.SVGProps<SVGSVGElement>) => (
      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-    </svg>
+         <line x1="18" y1="6" x2="6" y2="18"></line>
+         <line x1="6" y1="6" x2="18" y2="18"></line>
+     </svg>
 )
 
 interface Product {
@@ -25,7 +25,7 @@ interface Product {
 }
 
 interface PaginatedResponse {
-    items: Product[];
+    items: Product[] | null;
     totalPages: number;
     page: number;
 }
@@ -141,11 +141,12 @@ export default function CategoryPage() {
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data: PaginatedResponse = await response.json();
                 
-                setProducts(data.items || []);
+                const safeItems = data.items || [];
+                setProducts(safeItems);
                 setTotalPages(data.totalPages || 0);
 
                 if (currentPage === 1 && selectedBrands.length === 0 && minPrice === 0 && maxPrice === 5000) {
-                     const brands = new Set(data.items.map(p => p.brand).filter(Boolean));
+                     const brands = new Set(safeItems.map(p => p.brand).filter(Boolean));
                      setUniqueBrands(Array.from(brands));
                 }
 
@@ -237,12 +238,12 @@ export default function CategoryPage() {
                 <div className={`fixed inset-0 z-40 lg:hidden transition-all duration-300 ease-in-out ${isFilterOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                     <div onClick={() => setIsFilterOpen(false)} className="absolute inset-0 bg-black bg-opacity-50"></div>
                     <div className={`absolute top-0 right-0 h-full w-full max-w-sm bg-white p-6 transform transition-transform duration-300 ease-in-out ${isFilterOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                         <div className="flex justify-between items-center mb-6">
+                          <div className="flex justify-between items-center mb-6">
                             <h2 className="text-lg font-semibold">Filters</h2>
                             <button onClick={() => setIsFilterOpen(false)}>
                                 <CloseIcon className="h-6 w-6" />
                             </button>
-                         </div>
+                          </div>
                         <FilterSidebar {...{ uniqueBrands, selectedBrands, handleBrandChange, minPrice, setMinPrice, maxPrice, setMaxPrice }} />
                     </div>
                 </div>

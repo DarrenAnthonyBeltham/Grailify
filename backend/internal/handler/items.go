@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
-	"math" 
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,7 +30,8 @@ type InventoryInfo struct {
 }
 
 type ItemDetailResponse struct {
-	model.Item
+	Item         model.Item           `json:"item"`
+	DisplayPrice float64              `json:"displayPrice"`
 	PriceHistory []model.PriceHistory `json:"priceHistory"`
 	Inventory    []InventoryInfo      `json:"inventory"`
 }
@@ -125,78 +126,37 @@ func (h *ItemsHandler) SearchItems(w http.ResponseWriter, r *http.Request) {
 func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	categorySlug := params.Get("category")
-	minPriceStr := params.Get("minPrice")
-	maxPriceStr := params.Get("maxPrice")
-	brandsStr := params.Get("brands")
-
 	page, err := strconv.Atoi(params.Get("page"))
 	if err != nil || page < 1 {
 		page = 1
 	}
 	limit := 50
 
-	countQuery := "SELECT COUNT(DISTINCT i.id) FROM items i LEFT JOIN categories c ON i.category_id = c.id"
-	dataQuery := `
-		SELECT DISTINCT i.id, i.name, i.description, i.brand, i.image_url, i.created_at,
-		COALESCE(
-			(SELECT ph.price FROM price_history ph WHERE ph.item_id = i.id AND ph.type = 'sale' ORDER BY ph.recorded_at DESC LIMIT 1),
-			i.price
-		) as display_price
-		FROM items i LEFT JOIN categories c ON i.category_id = c.id
-	`
-
-	whereClauses := []string{"1=1"}
-	args := []interface{}{}
-
-	if categorySlug != "" && categorySlug != "all" && categorySlug != "allgrails" && categorySlug != "morecategories" {
-		whereClauses = append(whereClauses, "LOWER(c.slug) = ?")
-		args = append(args, strings.ToLower(categorySlug))
-	}
-
-	if brandsStr != "" {
-		brands := strings.Split(brandsStr, ",")
-		if len(brands) > 0 {
-			placeholders := "?" + strings.Repeat(",?", len(brands)-1)
-			whereClauses = append(whereClauses, "LOWER(i.brand) IN ("+placeholders+")")
-			for _, brand := range brands {
-				args = append(args, strings.ToLower(brand))
-			}
-		}
-	}
-
-	if minPrice, err := strconv.ParseFloat(minPriceStr, 64); err == nil {
-		whereClauses = append(whereClauses, "i.price >= ?")
-		args = append(args, minPrice)
-	}
-
-	if maxPrice, err := strconv.ParseFloat(maxPriceStr, 64); err == nil {
-		if maxPrice > 0 && maxPrice < 5000 {
-			whereClauses = append(whereClauses, "i.price <= ?")
-			args = append(args, maxPrice)
-		}
-	}
-
-	whereStr := " WHERE " + strings.Join(whereClauses, " AND ")
-	countQuery += whereStr
-	dataQuery += whereStr
-
+	countQuery := "SELECT COUNT(DISTINCT i.id) FROM items i LEFT JOIN categories c ON i.category_id = c.id WHERE LOWER(c.slug) = ? OR ? = 'allgrails'"
 	var totalItems int
-	err = h.DB.QueryRow(countQuery, args...).Scan(&totalItems)
+	err = h.DB.QueryRow(countQuery, strings.ToLower(categorySlug), strings.ToLower(categorySlug)).Scan(&totalItems)
 	if err != nil {
 		http.Error(w, "Failed to count items", http.StatusInternalServerError)
-		log.Printf("Database count query error: %v. Query: %s", err, countQuery)
 		return
 	}
 	totalPages := (totalItems + limit - 1) / limit
-
 	offset := (page - 1) * limit
-	dataQuery += " ORDER BY RAND() LIMIT ? OFFSET ?"
-	finalArgs := append(args, limit, offset)
 
-	rows, err := h.DB.Query(dataQuery, finalArgs...)
+	dataQuery := `
+        SELECT i.id, i.name, i.description, i.brand, i.image_url, i.created_at,
+        COALESCE(
+            (SELECT ph.price FROM price_history ph WHERE ph.item_id = i.id AND ph.type = 'sale' ORDER BY ph.recorded_at DESC LIMIT 1),
+            i.price
+        ) as display_price
+        FROM items i
+        LEFT JOIN categories c ON i.category_id = c.id
+        WHERE LOWER(c.slug) = ? OR ? = 'allgrails'
+        ORDER BY i.id
+        LIMIT ? OFFSET ?
+    `
+	rows, err := h.DB.Query(dataQuery, strings.ToLower(categorySlug), strings.ToLower(categorySlug), limit, offset)
 	if err != nil {
-		http.Error(w, "Failed to query database", http.StatusInternalServerError)
-		log.Printf("Database data query error: %v. Query: %s", err, dataQuery)
+		http.Error(w, "Failed to query items", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -204,21 +164,27 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	var items []model.Item
 	for rows.Next() {
 		var item model.Item
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Brand, &item.ImageURL, &item.CreatedAt, &item.Price); err != nil {
-			http.Error(w, "Failed to scan row data", http.StatusInternalServerError)
-			log.Printf("Database scan error: %v", err)
+		var description, imageUrl sql.NullString
+		var createdAt sql.NullTime
+
+		if err := rows.Scan(&item.ID, &item.Name, &description, &item.Brand, &imageUrl, &createdAt, &item.Price); err != nil {
+			http.Error(w, "Failed to scan item", http.StatusInternalServerError)
 			return
 		}
-		// Apply the rounding logic here
+
+		item.Description = description.String
+		item.ImageURL = imageUrl.String
+		if createdAt.Valid {
+			item.CreatedAt = createdAt.Time
+		}
+		
 		item.Price = math.Ceil(item.Price/10.0) * 10.0
 		items = append(items, item)
 	}
-
-	if err = rows.Err(); err != nil {
-		http.Error(w, "Error iterating through database rows", http.StatusInternalServerError)
-		log.Printf("Row iteration error: %v", err)
-		return
-	}
+    if err = rows.Err(); err != nil {
+        http.Error(w, "Row iteration error", http.StatusInternalServerError)
+        return
+    }
 
 	response := PaginatedResponse{
 		Items:      items,
@@ -229,6 +195,7 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
+
 
 func (h *ItemsHandler) GetAllCategories(w http.ResponseWriter, r *http.Request) {
 	query := "SELECT id, name, slug FROM categories ORDER BY name ASC"
@@ -266,37 +233,32 @@ func (h *ItemsHandler) GetAllCategories(w http.ResponseWriter, r *http.Request) 
 
 func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 	itemIDStr := r.URL.Query().Get("id")
-	if itemIDStr == "" {
-		http.Error(w, "Item ID is required", http.StatusBadRequest)
-		return
-	}
-	itemID, err := strconv.Atoi(itemIDStr)
-	if err != nil {
-		http.Error(w, "Invalid item ID", http.StatusBadRequest)
-		return
-	}
+	itemID, _ := strconv.Atoi(itemIDStr)
 
 	var item model.Item
 	var releaseDate sql.NullTime
 
 	itemQuery := "SELECT id, name, description, brand, price, items_sold, category_id, release_date, image_url, created_at FROM items WHERE id = ?"
-	err = h.DB.QueryRow(itemQuery, itemID).Scan(
+	err := h.DB.QueryRow(itemQuery, itemID).Scan(
 		&item.ID, &item.Name, &item.Description, &item.Brand, &item.Price, &item.ItemsSold, &item.CategoryID, &releaseDate, &item.ImageURL, &item.CreatedAt,
 	)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Item not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Failed to query item details", http.StatusInternalServerError)
-		}
-		log.Printf("Database query error for item details: %v", err)
+		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
-
 	if releaseDate.Valid {
 		item.ReleaseDate = releaseDate.Time
 	}
+
+	var lastSalePrice float64
+	priceQuery := "SELECT price FROM price_history WHERE item_id = ? AND type = 'sale' ORDER BY recorded_at DESC LIMIT 1"
+	err = h.DB.QueryRow(priceQuery, itemID).Scan(&lastSalePrice)
+	if err != nil {
+		lastSalePrice = item.Price
+	}
+
+	displayPrice := math.Ceil(lastSalePrice/10.0) * 10.0
 
 	var inventory []InventoryInfo
 	inventoryQuery := `
@@ -342,6 +304,7 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	response := ItemDetailResponse{
 		Item:         item,
+		DisplayPrice: displayPrice,
 		Inventory:    inventory,
 		PriceHistory: priceHistory,
 	}

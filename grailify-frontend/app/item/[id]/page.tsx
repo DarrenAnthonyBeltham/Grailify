@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import AddToCartModal from '@/components/modals/AddToCartModals';
 
 interface InventoryInfo {
     inventoryId: number;
@@ -16,17 +17,20 @@ interface PriceHistoryEntry {
     type: string;
     recorded_at: string;
 }
-interface ItemDetail {
-    id: number;
-    name: string;
-    description: string;
-    brand: string;
-    price: number; 
-    itemsSold: number;
-    category_id: number;
-    release_date: string;
-    imageUrl: string;
-    created_at: string;
+interface ItemDetailData {
+    item: {
+        id: number;
+        name: string;
+        description: string;
+        brand: string;
+        price: number;
+        itemsSold: number;
+        category_id: number;
+        release_date: string;
+        imageUrl: string;
+        created_at: string;
+    };
+    displayPrice: number;
     inventory: InventoryInfo[];
     priceHistory: PriceHistoryEntry[];
 }
@@ -100,25 +104,27 @@ const PriceChart = ({ data }: { data: { date: string, price: number }[] }) => {
         </div>
     );
 };
+
 const TimeframeSelector = ({ onSelect, selected }: { onSelect: (tf: string) => void, selected: string }) => {
     const timeframes = ["7D", "1M", "3M", "6M", "1Y", "All"];
     return (<div className="flex justify-center space-x-2 bg-neutral-100 p-1 rounded-lg">{timeframes.map(tf => (<button key={tf} onClick={() => onSelect(tf)} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${selected === tf ? 'bg-white text-black shadow-sm' : 'bg-transparent text-neutral-600 hover:text-black'}`}>{tf}</button>))}</div>)
 }
-const StatCard = ({ title, value, change, icon, iconBg }: { title: string, value: string, change?: string, icon: React.ReactNode, iconBg: string }) => (<div className="bg-white p-4 rounded-lg flex items-center border border-neutral-200"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${iconBg}`}>{icon}</div><div className="ml-4"><p className="text-sm text-neutral-600">{title}</p><div className="flex items-baseline space-x-2"><p className="text-lg font-bold text-black">{value}</p>{change && <p className="text-xs font-semibold text-green-600">{change}</p>}</div></div></div>)
 
+const StatCard = ({ title, value, change, icon, iconBg }: { title: string, value: string, change?: string, icon: React.ReactNode, iconBg: string }) => (<div className="bg-white p-4 rounded-lg flex items-center border border-neutral-200"><div className={`w-10 h-10 rounded-full flex items-center justify-center ${iconBg}`}>{icon}</div><div className="ml-4"><p className="text-sm text-neutral-600">{title}</p><div className="flex items-baseline space-x-2"><p className="text-lg font-bold text-black">{value}</p>{change && <p className="text-xs font-semibold text-green-600">{change}</p>}</div></div></div>)
 
 export default function ItemPage() {
     const router = useRouter();
     const params = useParams();
     const { id } = params;
 
-    const [item, setItem] = useState<ItemDetail | null>(null);
+    const [itemData, setItemData] = useState<ItemDetailData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [timeframe, setTimeframe] = useState('All');
     const [filteredPriceHistory, setFilteredPriceHistory] = useState<PriceHistoryEntry[]>([]);
     const [selectedInventoryId, setSelectedInventoryId] = useState<number | null>(null);
     const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
+    const [showCartModal, setShowCartModal] = useState(false);
 
     useEffect(() => {
         const fetchItemData = async () => {
@@ -130,8 +136,8 @@ export default function ItemPage() {
                 if (!response.ok) {
                     throw new Error(`Item not found or network error (${response.status})`);
                 }
-                const data: ItemDetail = await response.json();
-                setItem(data);
+                const data: ItemDetailData = await response.json();
+                setItemData(data);
                 setFilteredPriceHistory(data.priceHistory || []);
 
                 if (data.inventory && data.inventory.length > 0) {
@@ -139,7 +145,7 @@ export default function ItemPage() {
                     setSelectedInventoryId(defaultInventory.inventoryId);
                     setSelectedPrice(defaultInventory.price);
                 } else {
-                    setSelectedPrice(data.price); 
+                    setSelectedPrice(data.displayPrice);
                 }
             } catch (err: any) {
                 setError(err.message);
@@ -151,14 +157,14 @@ export default function ItemPage() {
     }, [id]);
 
     useEffect(() => {
-        if (!item || !item.priceHistory) {
+        if (!itemData || !itemData.priceHistory) {
             setFilteredPriceHistory([]);
             return;
         };
         const now = new Date();
         let startDate = new Date();
         if (timeframe === 'All') {
-            setFilteredPriceHistory(item.priceHistory);
+            setFilteredPriceHistory(itemData.priceHistory);
             return;
         }
         switch (timeframe) {
@@ -169,26 +175,26 @@ export default function ItemPage() {
             case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
             default: break;
         }
-        const data = item.priceHistory.filter((d: PriceHistoryEntry) => new Date(d.recorded_at) >= startDate);
+        const data = itemData.priceHistory.filter((d: PriceHistoryEntry) => new Date(d.recorded_at) >= startDate);
         setFilteredPriceHistory(data);
-    }, [timeframe, item]);
+    }, [timeframe, itemData]);
 
     const formattedReleaseDate = useMemo(() => {
-        if (!item?.release_date || item.release_date.startsWith('0001-01-01')) return 'N/A';
-        return new Date(item.release_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    }, [item]);
+        if (!itemData?.item.release_date || itemData.item.release_date.startsWith('0001-01-01')) return 'N/A';
+        return new Date(itemData.item.release_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }, [itemData]);
 
     const lastSale = useMemo(() => {
-        if (!item?.priceHistory || item.priceHistory.length === 0) return null;
-        const sortedHistory = [...item.priceHistory].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+        if (!itemData?.priceHistory || itemData.priceHistory.length === 0) return null;
+        const sortedHistory = [...itemData.priceHistory].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
         return sortedHistory.length > 0 ? sortedHistory[0].price : null;
-    }, [item]);
+    }, [itemData]);
 
     const pricePremium = useMemo(() => {
-        if (lastSale === null || !item?.price || item.price === 0) return null;
-        const premium = ((lastSale - item.price) / item.price) * 100;
+        if (lastSale === null || !itemData?.item.price || itemData.item.price === 0) return null;
+        const premium = ((lastSale - itemData.item.price) / itemData.item.price) * 100;
         return `${premium > 0 ? '+' : ''}${premium.toFixed(0)}%`;
-    }, [lastSale, item]);
+    }, [lastSale, itemData]);
 
     const handleSizeSelect = (inventoryItem: InventoryInfo) => {
         setSelectedInventoryId(inventoryItem.inventoryId);
@@ -196,109 +202,120 @@ export default function ItemPage() {
     };
 
     const handleAddToCart = () => {
-        if (!item) return;
-        const selectedInventoryItem = item.inventory?.find(inv => inv.inventoryId === selectedInventoryId);
-        if (item.inventory && item.inventory.length > 0 && !selectedInventoryItem) {
+        if (!itemData) return;
+        const selectedInventoryItem = itemData.inventory?.find(inv => inv.inventoryId === selectedInventoryId);
+        if (itemData.inventory && itemData.inventory.length > 0 && !selectedInventoryItem) {
             alert('Please select a size first.');
             return;
         }
 
         const cartItem = {
-            id: item.id,
-            inventoryId: selectedInventoryItem ? selectedInventoryItem.inventoryId : item.id,
-            name: item.name,
-            brand: item.brand,
+            id: itemData.item.id,
+            inventoryId: selectedInventoryItem ? selectedInventoryItem.inventoryId : itemData.item.id,
+            name: itemData.item.name,
+            brand: itemData.item.brand,
             size: selectedInventoryItem ? selectedInventoryItem.size : 'One Size',
             price: selectedPrice,
-            imageUrl: item.imageUrl
+            imageUrl: itemData.item.imageUrl
         };
 
         const existingCart = JSON.parse(localStorage.getItem('grailifyCart') || '[]');
         existingCart.push(cartItem);
         localStorage.setItem('grailifyCart', JSON.stringify(existingCart));
-        alert(`${item.name} (${cartItem.size}) has been added to your cart.`);
-        router.push('/cart');
+        
+        setShowCartModal(true);
     };
 
     if (isLoading) return <div className="text-center py-20">Loading item...</div>;
     if (error) return <div className="text-center text-red-500 py-20">Error: {error}</div>;
-    if (!item) return <div className="text-center py-20">Item could not be found.</div>;
+    if (!itemData) return <div className="text-center py-20">Item could not be found.</div>;
+
+    const modalItemInfo = {
+        name: itemData.item.name,
+        brand: itemData.item.brand,
+        size: itemData.inventory?.find(inv => inv.inventoryId === selectedInventoryId)?.size || 'One Size',
+        price: selectedPrice,
+        imageUrl: itemData.item.imageUrl,
+    };
 
     return (
-        <div className="bg-white">
-            <div className="container mx-auto px-4 py-12">
-                <button onClick={() => router.back()} className="flex items-center space-x-2 text-sm text-neutral-600 hover:text-black mb-6">
-                    <BackIcon className="h-4 w-4" /><span>Back to results</span>
-                </button>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    <div className="w-full">
-                        <div className="aspect-square bg-white rounded-lg overflow-hidden border border-neutral-200">
-                             <img src={item.imageUrl || 'https://placehold.co/800x800/e0e0e0/333?text=No+Image'} alt={item.name} className="w-full h-full object-contain" />
-                        </div>
-                    </div>
-
-                    <div>
-                        <h1 className="text-3xl lg:text-4xl font-bold text-black tracking-tight">{item.name}</h1>
-                        <p className="text-lg text-neutral-600 mt-2">{item.brand}</p>
-
-                        <div className="mt-8 p-4 border border-neutral-200 rounded-lg">
-                            <p className="text-sm text-neutral-600">Price</p>
-                            <p className="text-2xl font-bold text-black">${selectedPrice ? selectedPrice.toFixed(2) : 'N/A'}</p>
-                        </div>
-
-                        {(item.inventory && item.inventory.length > 0) && (
-                            <div className="mt-6">
-                                <h3 className="text-sm font-medium text-neutral-700 mb-2">Select Size</h3>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {item.inventory.map(inv => (
-                                        <button
-                                            key={inv.inventoryId}
-                                            onClick={() => handleSizeSelect(inv)}
-                                            className={`px-4 py-3 rounded-lg text-center font-semibold border text-sm transition-colors ${selectedInventoryId === inv.inventoryId ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
-                                        >
-                                            {inv.size}
-                                        </button>
-                                    ))}
-                                </div>
+        <>
+            {showCartModal && <AddToCartModal item={modalItemInfo} onClose={() => setShowCartModal(false)} />}
+            <div className="bg-white">
+                <div className="container mx-auto px-4 py-12">
+                    <button onClick={() => router.back()} className="flex items-center space-x-2 text-sm text-neutral-600 hover:text-black mb-6">
+                        <BackIcon className="h-4 w-4" /><span>Back to results</span>
+                    </button>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                        <div className="w-full">
+                            <div className="aspect-square bg-white rounded-lg overflow-hidden border border-neutral-200">
+                                <img src={itemData.item.imageUrl || 'https://placehold.co/800x800/e0e0e0/333?text=No+Image'} alt={itemData.item.name} className="w-full h-full object-contain" />
                             </div>
-                        )}
-
-                        <div className="mt-4 p-4 border border-neutral-200 rounded-lg">
-                            <p className="text-sm text-neutral-600">Release Date</p>
-                            <p className="text-lg font-semibold text-black">{formattedReleaseDate}</p>
                         </div>
 
-                        <div className="mt-6 grid grid-cols-1">
-                           <button onClick={handleAddToCart} className="w-full bg-black text-white py-4 rounded-lg font-semibold hover:bg-neutral-800">
-                                Add to Cart
-                           </button>
-                        </div>
+                        <div>
+                            <h1 className="text-3xl lg:text-4xl font-bold text-black tracking-tight">{itemData.item.name}</h1>
+                            <p className="text-lg text-neutral-600 mt-2">{itemData.item.brand}</p>
 
-                        <div className="mt-8">
-                            <h3 className="text-lg font-semibold">Description</h3>
-                            <p className="mt-2 text-neutral-700 leading-relaxed">{item.description}</p>
+                            <div className="mt-8 p-4 border border-neutral-200 rounded-lg">
+                                <p className="text-sm text-neutral-600">Price</p>
+                                <p className="text-2xl font-bold text-black">${selectedPrice ? selectedPrice.toFixed(2) : 'N/A'}</p>
+                            </div>
+
+                            {(itemData.inventory && itemData.inventory.length > 0) && (
+                                <div className="mt-6">
+                                    <h3 className="text-sm font-medium text-neutral-700 mb-2">Select Size</h3>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {itemData.inventory.map(inv => (
+                                            <button
+                                                key={inv.inventoryId}
+                                                onClick={() => handleSizeSelect(inv)}
+                                                className={`px-4 py-3 rounded-lg text-center font-semibold border text-sm transition-colors ${selectedInventoryId === inv.inventoryId ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
+                                            >
+                                                {inv.size}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="mt-4 p-4 border border-neutral-200 rounded-lg">
+                                <p className="text-sm text-neutral-600">Release Date</p>
+                                <p className="text-lg font-semibold text-black">{formattedReleaseDate}</p>
+                            </div>
+
+                            <div className="mt-6 grid grid-cols-1">
+                               <button onClick={handleAddToCart} className="w-full bg-black text-white py-4 rounded-lg font-semibold hover:bg-neutral-800">
+                                    Add to Cart
+                               </button>
+                            </div>
+
+                            <div className="mt-8">
+                                <h3 className="text-lg font-semibold">Description</h3>
+                                <p className="mt-2 text-neutral-700 leading-relaxed">{itemData.item.description}</p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="mt-16 bg-neutral-50 rounded-lg p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-center">
-                        <h2 className="text-2xl font-bold text-center sm:text-left">Price History</h2>
-                        <div className="mt-4 sm:mt-0">
-                           <TimeframeSelector onSelect={setTimeframe} selected={timeframe} />
+                    <div className="mt-16 bg-neutral-50 rounded-lg p-6">
+                        <div className="flex flex-col sm:flex-row justify-between items-center">
+                            <h2 className="text-2xl font-bold text-center sm:text-left">Price History</h2>
+                            <div className="mt-4 sm:mt-0">
+                               <TimeframeSelector onSelect={setTimeframe} selected={timeframe} />
+                            </div>
                         </div>
-                    </div>
-                     <div className="mt-6">
-                         <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
-                    </div>
-                    <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                       <StatCard title="Last Sale" value={lastSale ? `$${lastSale.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-blue-100" />
-                       <StatCard title="Retail Price" value={item.price ? `$${item.price.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
-                       <StatCard title="Total Sold" value={item.itemsSold?.toLocaleString() ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} iconBg="bg-green-100" />
-                       <StatCard title="Price Premium" value={pricePremium ?? '--'} change="vs Retail" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-yellow-100" />
+                         <div className="mt-6">
+                             <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
+                        </div>
+                        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                           <StatCard title="Last Sale" value={lastSale ? `$${lastSale.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-blue-100" />
+                           <StatCard title="Retail Price" value={itemData.item.price ? `$${itemData.item.price.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
+                           <StatCard title="Total Sold" value={itemData.item.itemsSold?.toLocaleString() ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} iconBg="bg-green-100" />
+                           <StatCard title="Price Premium" value={pricePremium ?? '--'} change="vs Retail" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-yellow-100" />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }
