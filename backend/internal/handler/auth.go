@@ -4,23 +4,29 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strings"
+	"strings" 
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-
-	"grailify/internal/database"
 	"grailify/internal/model"
 )
+
+var jwtKey = []byte("my_super_secret_key_that_is_long_and_secure")
 
 type AuthHandler struct {
 	DB *sql.DB
 }
 
-type AuthRequest struct {
-	Username string `json:"username"`
+type Credentials struct {
+	Username string `json:"username,omitempty"` 
 	Email    string `json:"email"`
 	Password string `json:"password"`
+}
+
+type Claims struct {
+	UserID int `json:"userId"`
+	jwt.RegisteredClaims
 }
 
 func respondWithError(w http.ResponseWriter, code int, message string) {
@@ -35,27 +41,20 @@ func (h *AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req AuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var creds Credentials
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
 
-	user := &model.User{
-		Username:     req.Username,
-		Email:        req.Email,
-		PasswordHash: string(hashedPassword),
-		CreatedAt:    time.Now(),
-	}
-
-	userRepo := database.NewUserRepo(h.DB)
-	if err := userRepo.CreateUser(user); err != nil {
+	_, err = h.DB.Exec("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)", creds.Username, creds.Email, string(hashedPassword))
+	if err != nil {
 		if strings.Contains(err.Error(), "Duplicate entry") {
 			respondWithError(w, http.StatusConflict, "An account with this email already exists.")
 		} else {
@@ -75,14 +74,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req AuthRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var creds Credentials
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
 		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	userRepo := database.NewUserRepo(h.DB)
-	user, err := userRepo.GetUserByEmail(req.Email)
+	var user model.User
+	err := h.DB.QueryRow("SELECT id, password_hash FROM users WHERE email = ?", creds.Email).Scan(&user.ID, &user.PasswordHash)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			respondWithError(w, http.StatusUnauthorized, "Invalid email or password")
@@ -92,12 +91,30 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(creds.Password)); err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+
+	expirationTime := time.Now().Add(24 * time.Hour) 
+	claims := &Claims{
+		UserID: user.ID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not generate authentication token")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Logged in successfully"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Logged in successfully",
+		"token":   tokenString,
+	})
 }

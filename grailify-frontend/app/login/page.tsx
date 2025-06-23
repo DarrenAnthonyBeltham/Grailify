@@ -8,8 +8,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
@@ -22,19 +20,24 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/api/login`, {
+      const response = await fetch(`http://localhost:8080/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to login');
+        throw new Error(data.message || 'Failed to login');
       }
-    
-      localStorage.setItem('authToken', 'dummy-token'); 
-      window.location.href = '/';
+      
+      if (data.token) {
+        localStorage.setItem('authToken', data.token); 
+        window.location.href = '/'; 
+      } else {
+        throw new Error('Login successful, but no token received.');
+      }
 
     } catch (err: any) {
       setError(err.message);
@@ -62,6 +65,7 @@ export default function LoginPage() {
                 name="email"
                 type="email"
                 autoComplete="email"
+                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-t-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 value={email}
@@ -75,6 +79,7 @@ export default function LoginPage() {
                 name="password"
                 type="password"
                 autoComplete="current-password"
+                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-b-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}

@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function SignUpPage() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const validateEmail = (email: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,23 +20,27 @@ export default function SignUpPage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!username || !email || !password) {
-        setError('Please fill out all fields.');
-        return;
+      setError('Please fill out all fields.');
+      return;
     }
 
     if (!validateEmail(email)) {
-        setError('Please enter a valid email address.');
+      setError('Please enter a valid email address.');
+      return;
+    }
+    
+    if (password.length < 8) {
+        setError('Password must be at least 8 characters long.');
         return;
     }
 
     setIsLoading(true);
 
     try { 
-      const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-      const response = await fetch(`${API_BASE}/api/signup`, {
+      const response = await fetch(`http://localhost:8080/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -44,8 +51,10 @@ export default function SignUpPage() {
         throw new Error(errorData.message || 'Failed to create account');
       }
 
-      localStorage.setItem('authToken', 'dummy-token'); 
-      window.location.href = '/';
+      setSuccess('Account created successfully! Redirecting to login...');
+      setTimeout(() => {
+        router.push('/login');
+      }, 2000);
 
     } catch (err: any) {
       setError(err.message);
@@ -72,6 +81,7 @@ export default function SignUpPage() {
                 id="username"
                 name="username"
                 type="text"
+                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-t-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Username"
                 value={username}
@@ -85,6 +95,7 @@ export default function SignUpPage() {
                 name="email"
                 type="email"
                 autoComplete="email"
+                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Email address"
                 value={email}
@@ -98,6 +109,7 @@ export default function SignUpPage() {
                 name="password"
                 type="password"
                 autoComplete="new-password"
+                required
                 className="appearance-none rounded-none relative block w-full px-3 py-3 border border-neutral-300 placeholder-neutral-500 text-neutral-900 rounded-b-md focus:outline-none focus:ring-black focus:border-black focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}
@@ -107,11 +119,12 @@ export default function SignUpPage() {
           </div>
 
           {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+          {success && <p className="text-sm text-green-600 text-center">{success}</p>}
 
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !!success}
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-black hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black disabled:bg-neutral-400"
             >
               {isLoading ? 'Creating Account...' : 'Create Account'}
@@ -119,11 +132,11 @@ export default function SignUpPage() {
           </div>
         </form>
          <p className="mt-4 text-center text-sm text-neutral-600">
-            Already have an account?{' '}
-            <a href="/login" className="font-medium text-black hover:underline">
-                Log in
-            </a>
-        </p>
+           Already have an account?{' '}
+           <a href="/login" className="font-medium text-black hover:underline">
+             Log in
+           </a>
+         </p>
       </div>
     </div>
   );
