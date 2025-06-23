@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 
-// Interfaces (no changes)
+// Interfaces
 interface InventoryInfo {
     inventoryId: number;
     size: string;
@@ -24,6 +24,7 @@ interface ItemDetail {
     description: string;
     brand: string;
     price: number;
+    retailPrice: number; 
     itemsSold: number;
     category_id: number;
     release_date: string;
@@ -72,7 +73,7 @@ const PriceChart = ({ data }: { data: { date: string, price: number }[] }) => {
         svgPoint.x = event.clientX;
         const invertedPoint = svgPoint.matrixTransform(svgRef.current.getScreenCTM()!.inverse());
         const index = chartData.findIndex(d => toSvgX(d.date) > invertedPoint.x);
-        if (index === -1 || index === 0) return; 
+        if (index === -1 || index === 0) return;
         const p1 = chartData[index - 1];
         const p2 = chartData[index];
         const x1 = toSvgX(p1.date);
@@ -112,7 +113,7 @@ const StatCard = ({ title, value, change, icon, iconBg }: { title: string, value
 export default function ItemPage() {
     const router = useRouter();
     const params = useParams();
-    const { id } = params; 
+    const { id } = params;
 
     const [item, setItem] = useState<ItemDetail | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -145,7 +146,7 @@ export default function ItemPage() {
 
     useEffect(() => {
         fetchItemData();
-    }, [id]); 
+    }, [id]);
 
     useEffect(() => {
         if (!item || !item.priceHistory) {
@@ -166,7 +167,7 @@ export default function ItemPage() {
             case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
             default: break;
         }
-        const data = item.priceHistory.filter(d => new Date(d.recorded_at) >= startDate);
+        const data = item.priceHistory.filter((d: PriceHistoryEntry) => new Date(d.recorded_at) >= startDate);
         setFilteredPriceHistory(data);
     }, [timeframe, item]);
 
@@ -174,22 +175,21 @@ export default function ItemPage() {
         if (!item?.release_date || item.release_date.startsWith('0001-01-01')) return 'N/A';
         return new Date(item.release_date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     }, [item]);
-    
-    const lastSale = useMemo(() => {
-        if (!filteredPriceHistory || filteredPriceHistory.length === 0) return null;
-        return filteredPriceHistory[filteredPriceHistory.length - 1].price;
-    }, [filteredPriceHistory]);
 
-    // --- THIS IS THE FIX ---
-    // The price displayed is now the last sale price if available, otherwise it falls back to the retail price.
-    const displayedPrice = useMemo(() => {
-        return lastSale ?? item?.price;
-    }, [lastSale, item]);
-    // --- END OF FIX ---
+    const lastSale = useMemo(() => {
+        if (!item?.priceHistory || item.priceHistory.length === 0) return null;
+        const sortedHistory = [...item.priceHistory].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
+        if (sortedHistory.length > 0) {
+            return sortedHistory[0].price;
+        }
+        return null;
+    }, [item]);
+
+    const displayedPrice = item?.price;
 
     const pricePremium = useMemo(() => {
-        if (!lastSale || !item?.price || item.price === 0) return null;
-        const premium = ((lastSale - item.price) / item.price) * 100;
+        if (lastSale === null || !item?.retailPrice || item.retailPrice === 0) return null;
+        const premium = ((lastSale - item.retailPrice) / item.retailPrice) * 100;
         return `${premium > 0 ? '+' : ''}${premium.toFixed(0)}%`;
     }, [lastSale, item]);
 
@@ -197,22 +197,21 @@ export default function ItemPage() {
     const handleAddToCart = () => {
         if (!item) return;
 
-        // For items without sizes (like watches), create a default cart item.
         const selectedInventoryItem = item.inventory?.find(inv => inv.inventoryId === selectedInventoryId);
-        
+
         if (item.inventory && item.inventory.length > 0 && !selectedInventoryItem) {
             alert('Please select a size first.');
             return;
         }
 
-        const cartItem = { 
-            id: item.id, 
-            inventoryId: selectedInventoryItem ? selectedInventoryItem.inventoryId : item.id, // Use item.id as a fallback
-            name: item.name, 
-            brand: item.brand, 
-            size: selectedInventoryItem ? selectedInventoryItem.size : 'One Size', 
-            price: displayedPrice, // Use the dynamically displayed price
-            imageUrl: item.imageUrl 
+        const cartItem = {
+            id: item.id,
+            inventoryId: selectedInventoryItem ? selectedInventoryItem.inventoryId : item.id,
+            name: item.name,
+            brand: item.brand,
+            size: selectedInventoryItem ? selectedInventoryItem.size : 'One Size',
+            price: selectedInventoryItem ? selectedInventoryItem.price : displayedPrice,
+            imageUrl: item.imageUrl
         };
 
         const existingCart = JSON.parse(localStorage.getItem('grailifyCart') || '[]');
@@ -238,22 +237,22 @@ export default function ItemPage() {
                              <img src={item.imageUrl || 'https://placehold.co/800x800/e0e0e0/333?text=No+Image'} alt={item.name} className="w-full h-full object-contain" />
                         </div>
                     </div>
-                    
+
                     <div>
                         <h1 className="text-3xl lg:text-4xl font-bold text-black tracking-tight">{item.name}</h1>
                         <p className="text-lg text-neutral-600 mt-2">{item.brand}</p>
-                        
+
                         <div className="mt-8 p-4 border border-neutral-200 rounded-lg">
-                            <p className="text-sm text-neutral-600">Price</p>
-                            <p className="text-2xl font-bold text-black">${displayedPrice?.toFixed(2)}</p>
+                            <p className="text-sm text-neutral-600">Last Sale</p>
+                            <p className="text-2xl font-bold text-black">${displayedPrice ? displayedPrice.toFixed(2) : 'N/A'}</p>
                         </div>
-                        
+
                         {(item.category_id === 1 || item.category_id === 2) && (
                             <div className="mt-6">
                                 <h3 className="text-sm font-medium text-neutral-700 mb-2">Select Size</h3>
                                 <div className="grid grid-cols-4 gap-2">
                                     {item.inventory.map(inv => (
-                                        <button 
+                                        <button
                                             key={inv.inventoryId}
                                             onClick={() => setSelectedInventoryId(inv.inventoryId)}
                                             className={`px-4 py-3 rounded-lg text-center font-semibold border text-sm transition-colors ${selectedInventoryId === inv.inventoryId ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
@@ -264,12 +263,12 @@ export default function ItemPage() {
                                 </div>
                             </div>
                         )}
-                         
-                         <div className="mt-4 p-4 border border-neutral-200 rounded-lg">
+
+                        <div className="mt-4 p-4 border border-neutral-200 rounded-lg">
                             <p className="text-sm text-neutral-600">Release Date</p>
                             <p className="text-lg font-semibold text-black">{formattedReleaseDate}</p>
                         </div>
-                        
+
                         <div className="mt-6 grid grid-cols-1">
                            <button onClick={handleAddToCart} className="w-full bg-black text-white py-4 rounded-lg font-semibold hover:bg-neutral-800">
                                 Add to Cart
@@ -291,11 +290,11 @@ export default function ItemPage() {
                         </div>
                     </div>
                      <div className="mt-6">
-                        <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
+                         <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
                     </div>
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                        <StatCard title="Last Sale" value={lastSale ? `$${lastSale.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-blue-100" />
-                       <StatCard title="Retail Price" value={`$${item.price.toFixed(2)}`} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
+                       <StatCard title="Retail Price" value={item.retailPrice ? `$${item.retailPrice.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
                        <StatCard title="Total Sold" value={item.itemsSold?.toLocaleString() ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} iconBg="bg-green-100" />
                        <StatCard title="Price Premium" value={pricePremium ?? '--'} change="vs Retail" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-yellow-100" />
                     </div>
