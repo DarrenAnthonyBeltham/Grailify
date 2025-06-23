@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"math" 
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,7 +31,6 @@ type InventoryInfo struct {
 
 type ItemDetailResponse struct {
 	model.Item
-	RetailPrice  float64              `json:"retailPrice"`
 	PriceHistory []model.PriceHistory `json:"priceHistory"`
 	Inventory    []InventoryInfo      `json:"inventory"`
 }
@@ -137,12 +137,13 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 
 	countQuery := "SELECT COUNT(DISTINCT i.id) FROM items i LEFT JOIN categories c ON i.category_id = c.id"
 	dataQuery := `
-        SELECT DISTINCT i.id, i.name, i.description, i.brand,
-        (SELECT p.price FROM price_history p WHERE p.item_id = i.id AND p.type = 'sale' ORDER BY p.recorded_at DESC LIMIT 1) as last_sale_price,
-        i.price, i.image_url, i.created_at
-        FROM items i
-        LEFT JOIN categories c ON i.category_id = c.id
-    `
+		SELECT DISTINCT i.id, i.name, i.description, i.brand, i.image_url, i.created_at,
+		COALESCE(
+			(SELECT ph.price FROM price_history ph WHERE ph.item_id = i.id AND ph.type = 'sale' ORDER BY ph.recorded_at DESC LIMIT 1),
+			i.price
+		) as display_price
+		FROM items i LEFT JOIN categories c ON i.category_id = c.id
+	`
 
 	whereClauses := []string{"1=1"}
 	args := []interface{}{}
@@ -203,15 +204,13 @@ func (h *ItemsHandler) GetAllItems(w http.ResponseWriter, r *http.Request) {
 	var items []model.Item
 	for rows.Next() {
 		var item model.Item
-		var lastSalePrice sql.NullFloat64
-		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Brand, &lastSalePrice, &item.Price, &item.ImageURL, &item.CreatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Description, &item.Brand, &item.ImageURL, &item.CreatedAt, &item.Price); err != nil {
 			http.Error(w, "Failed to scan row data", http.StatusInternalServerError)
 			log.Printf("Database scan error: %v", err)
 			return
 		}
-		if lastSalePrice.Valid {
-			item.Price = lastSalePrice.Float64
-		}
+		// Apply the rounding logic here
+		item.Price = math.Ceil(item.Price/10.0) * 10.0
 		items = append(items, item)
 	}
 
@@ -279,18 +278,10 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	var item model.Item
 	var releaseDate sql.NullTime
-	var lastSalePrice sql.NullFloat64
-	var retailPrice float64 
 
-	itemQuery := `
-        SELECT i.id, i.name, i.description, i.brand,
-        (SELECT p.price FROM price_history p WHERE p.item_id = i.id AND p.type = 'sale' ORDER BY p.recorded_at DESC LIMIT 1) as last_sale_price,
-        i.price as retail_price, i.items_sold, i.category_id, i.release_date, i.image_url, i.created_at
-        FROM items i
-        WHERE i.id = ?
-    `
+	itemQuery := "SELECT id, name, description, brand, price, items_sold, category_id, release_date, image_url, created_at FROM items WHERE id = ?"
 	err = h.DB.QueryRow(itemQuery, itemID).Scan(
-		&item.ID, &item.Name, &item.Description, &item.Brand, &lastSalePrice, &retailPrice, &item.ItemsSold, &item.CategoryID, &releaseDate, &item.ImageURL, &item.CreatedAt,
+		&item.ID, &item.Name, &item.Description, &item.Brand, &item.Price, &item.ItemsSold, &item.CategoryID, &releaseDate, &item.ImageURL, &item.CreatedAt,
 	)
 
 	if err != nil {
@@ -305,12 +296,6 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	if releaseDate.Valid {
 		item.ReleaseDate = releaseDate.Time
-	}
-
-	if lastSalePrice.Valid {
-		item.Price = lastSalePrice.Float64
-	} else {
-		item.Price = retailPrice
 	}
 
 	var inventory []InventoryInfo
@@ -357,7 +342,6 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	response := ItemDetailResponse{
 		Item:         item,
-		RetailPrice:  retailPrice, 
 		Inventory:    inventory,
 		PriceHistory: priceHistory,
 	}

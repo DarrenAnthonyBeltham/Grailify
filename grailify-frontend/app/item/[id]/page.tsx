@@ -2,9 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import Link from 'next/link';
 
-// Interfaces
 interface InventoryInfo {
     inventoryId: number;
     size: string;
@@ -23,8 +21,7 @@ interface ItemDetail {
     name: string;
     description: string;
     brand: string;
-    price: number;
-    retailPrice: number; 
+    price: number; 
     itemsSold: number;
     category_id: number;
     release_date: string;
@@ -121,30 +118,35 @@ export default function ItemPage() {
     const [timeframe, setTimeframe] = useState('All');
     const [filteredPriceHistory, setFilteredPriceHistory] = useState<PriceHistoryEntry[]>([]);
     const [selectedInventoryId, setSelectedInventoryId] = useState<number | null>(null);
-
-    const fetchItemData = async () => {
-        if (!id) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-            const response = await fetch(`http://localhost:8080/api/item?id=${id}`);
-            if (!response.ok) {
-                throw new Error(`Item not found or network error (${response.status})`);
-            }
-            const data: ItemDetail = await response.json();
-            setItem(data);
-            setFilteredPriceHistory(data.priceHistory || []);
-            if (data.inventory && data.inventory.length > 0) {
-                setSelectedInventoryId(data.inventory[0].inventoryId);
-            }
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
 
     useEffect(() => {
+        const fetchItemData = async () => {
+            if (!id) return;
+            setIsLoading(true);
+            setError(null);
+            try {
+                const response = await fetch(`http://localhost:8080/api/item?id=${id}`);
+                if (!response.ok) {
+                    throw new Error(`Item not found or network error (${response.status})`);
+                }
+                const data: ItemDetail = await response.json();
+                setItem(data);
+                setFilteredPriceHistory(data.priceHistory || []);
+
+                if (data.inventory && data.inventory.length > 0) {
+                    const defaultInventory = data.inventory[0];
+                    setSelectedInventoryId(defaultInventory.inventoryId);
+                    setSelectedPrice(defaultInventory.price);
+                } else {
+                    setSelectedPrice(data.price); 
+                }
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
         fetchItemData();
     }, [id]);
 
@@ -179,26 +181,23 @@ export default function ItemPage() {
     const lastSale = useMemo(() => {
         if (!item?.priceHistory || item.priceHistory.length === 0) return null;
         const sortedHistory = [...item.priceHistory].sort((a, b) => new Date(b.recorded_at).getTime() - new Date(a.recorded_at).getTime());
-        if (sortedHistory.length > 0) {
-            return sortedHistory[0].price;
-        }
-        return null;
+        return sortedHistory.length > 0 ? sortedHistory[0].price : null;
     }, [item]);
 
-    const displayedPrice = item?.price;
-
     const pricePremium = useMemo(() => {
-        if (lastSale === null || !item?.retailPrice || item.retailPrice === 0) return null;
-        const premium = ((lastSale - item.retailPrice) / item.retailPrice) * 100;
+        if (lastSale === null || !item?.price || item.price === 0) return null;
+        const premium = ((lastSale - item.price) / item.price) * 100;
         return `${premium > 0 ? '+' : ''}${premium.toFixed(0)}%`;
     }, [lastSale, item]);
 
+    const handleSizeSelect = (inventoryItem: InventoryInfo) => {
+        setSelectedInventoryId(inventoryItem.inventoryId);
+        setSelectedPrice(inventoryItem.price);
+    };
 
     const handleAddToCart = () => {
         if (!item) return;
-
         const selectedInventoryItem = item.inventory?.find(inv => inv.inventoryId === selectedInventoryId);
-
         if (item.inventory && item.inventory.length > 0 && !selectedInventoryItem) {
             alert('Please select a size first.');
             return;
@@ -210,7 +209,7 @@ export default function ItemPage() {
             name: item.name,
             brand: item.brand,
             size: selectedInventoryItem ? selectedInventoryItem.size : 'One Size',
-            price: selectedInventoryItem ? selectedInventoryItem.price : displayedPrice,
+            price: selectedPrice,
             imageUrl: item.imageUrl
         };
 
@@ -243,18 +242,18 @@ export default function ItemPage() {
                         <p className="text-lg text-neutral-600 mt-2">{item.brand}</p>
 
                         <div className="mt-8 p-4 border border-neutral-200 rounded-lg">
-                            <p className="text-sm text-neutral-600">Last Sale</p>
-                            <p className="text-2xl font-bold text-black">${displayedPrice ? displayedPrice.toFixed(2) : 'N/A'}</p>
+                            <p className="text-sm text-neutral-600">Price</p>
+                            <p className="text-2xl font-bold text-black">${selectedPrice ? selectedPrice.toFixed(2) : 'N/A'}</p>
                         </div>
 
-                        {(item.category_id === 1 || item.category_id === 2) && (
+                        {(item.inventory && item.inventory.length > 0) && (
                             <div className="mt-6">
                                 <h3 className="text-sm font-medium text-neutral-700 mb-2">Select Size</h3>
                                 <div className="grid grid-cols-4 gap-2">
                                     {item.inventory.map(inv => (
                                         <button
                                             key={inv.inventoryId}
-                                            onClick={() => setSelectedInventoryId(inv.inventoryId)}
+                                            onClick={() => handleSizeSelect(inv)}
                                             className={`px-4 py-3 rounded-lg text-center font-semibold border text-sm transition-colors ${selectedInventoryId === inv.inventoryId ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
                                         >
                                             {inv.size}
@@ -294,7 +293,7 @@ export default function ItemPage() {
                     </div>
                     <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                        <StatCard title="Last Sale" value={lastSale ? `$${lastSale.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-blue-100" />
-                       <StatCard title="Retail Price" value={item.retailPrice ? `$${item.retailPrice.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
+                       <StatCard title="Retail Price" value={item.price ? `$${item.price.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
                        <StatCard title="Total Sold" value={item.itemsSold?.toLocaleString() ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} iconBg="bg-green-100" />
                        <StatCard title="Price Premium" value={pricePremium ?? '--'} change="vs Retail" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-yellow-100" />
                     </div>
