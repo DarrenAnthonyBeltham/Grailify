@@ -16,6 +16,11 @@ type ItemsHandler struct {
 	DB *sql.DB
 }
 
+type TrendingResponse struct {
+	TrendingSneakers         []model.Item `json:"trendingSneakers"`
+	TrendingApparelAccessories []model.Item `json:"trendingApparelAccessories"`
+}
+
 type PaginatedResponse struct {
 	Items      []model.Item `json:"items"`
 	TotalPages int          `json:"totalPages"`
@@ -41,6 +46,72 @@ type SearchResult struct {
 	Name     string `json:"name"`
 	Brand    string `json:"brand"`
 	ImageURL string `json:"imageUrl"`
+}
+
+func (h *ItemsHandler) GetTrendingItems(w http.ResponseWriter, r *http.Request) {
+	
+	fetchItems := func(query string) ([]model.Item, error) {
+		rows, err := h.DB.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var items []model.Item
+		for rows.Next() {
+			var item model.Item
+			var displayPrice float64
+			if err := rows.Scan(&item.ID, &item.Name, &item.Brand, &item.ImageURL, &displayPrice); err != nil {
+				log.Printf("Error scanning trending item: %v", err)
+				continue
+			}
+			item.Price = math.Ceil(displayPrice/10.0) * 10.0
+			items = append(items, item)
+		}
+		return items, rows.Err()
+	}
+
+	sneakersQuery := `
+        SELECT id, name, brand, image_url,
+        COALESCE(
+            (SELECT price FROM price_history WHERE item_id = items.id AND type = 'sale' ORDER BY recorded_at DESC LIMIT 1),
+            price
+        ) as display_price
+        FROM items
+        WHERE category_id = 1
+        ORDER BY items_sold DESC
+        LIMIT 4`
+	
+	sneakers, err := fetchItems(sneakersQuery)
+	if err != nil {
+		http.Error(w, "Failed to fetch trending sneakers", http.StatusInternalServerError)
+		return
+	}
+
+	apparelQuery := `
+        SELECT id, name, brand, image_url,
+        COALESCE(
+            (SELECT price FROM price_history WHERE item_id = items.id AND type = 'sale' ORDER BY recorded_at DESC LIMIT 1),
+            price
+        ) as display_price
+        FROM items
+        WHERE category_id IN (2, 5)
+        ORDER BY items_sold DESC
+        LIMIT 4`
+
+	apparelAccessories, err := fetchItems(apparelQuery)
+	if err != nil {
+		http.Error(w, "Failed to fetch trending apparel & accessories", http.StatusInternalServerError)
+		return
+	}
+
+	response := TrendingResponse{
+		TrendingSneakers:         sneakers,
+		TrendingApparelAccessories: apparelAccessories,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func (h *ItemsHandler) RecordSale(w http.ResponseWriter, r *http.Request) {
