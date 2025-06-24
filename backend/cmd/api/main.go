@@ -82,7 +82,6 @@ func main() {
 	r.HandleFunc("/api/trending", itemsHandler.GetTrendingItems).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/sell-page-items", itemsHandler.GetSellPageData).Methods("GET", "OPTIONS")
 
-
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(jwtMiddleware)
 	api.HandleFunc("/profile", profileHandler.GetProfile).Methods("GET", "OPTIONS")
@@ -94,6 +93,7 @@ func main() {
 	api.HandleFunc("/payment-methods", profileHandler.AddPaymentMethod).Methods("POST", "OPTIONS")
 	api.HandleFunc("/payment-methods/{id:[0-9]+}", profileHandler.DeletePaymentMethod).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/orders", profileHandler.CreateOrder).Methods("POST", "OPTIONS")
+	api.HandleFunc("/listings", itemsHandler.CreateListing).Methods("POST", "OPTIONS")
 
 	log.Println("Starting Grailify server on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

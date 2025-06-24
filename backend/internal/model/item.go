@@ -40,7 +40,7 @@ type User struct {
 type UserAddress struct {
     ID                  int       `json:"id"`
     UserID              int       `json:"userId"`
-    Type                string    `json:"type"` // 'shipping' or 'billing'
+    Type                string    `json:"type"`
     FullName            string    `json:"fullName"`
     AddressLine1        string    `json:"addressLine1"`
     AddressLine2        string    `json:"addressLine2,omitempty"`
@@ -90,4 +90,22 @@ type OrderItem struct {
     PriceAtPurchase float64 `json:"priceAtPurchase"`
     ItemName        string  `json:"itemName,omitempty"` 
     ItemImageURL    string  `json:"itemImageUrl,omitempty"` 
+}
+
+type UserListing struct {
+	ListingID    int     `json:"listingId"`
+	ItemID       int     `json:"itemId"`
+	ItemName     string  `json:"itemName"`
+	ItemImageURL string  `json:"itemImageUrl"`
+	Size         string  `json:"size"`
+	Price        float64 `json:"price"`
+	Stock        int     `json:"stock"`
+}
+
+type ProfileResponse struct {
+	User           User                `json:"user"`
+	Addresses      []UserAddress       `json:"addresses"`
+	PaymentMethods []UserPaymentMethod `json:"paymentMethods"`
+	OrderHistory   []Order             `json:"orderHistory"`
+	UserListings   []UserListing       `json:"userListings"`
 }

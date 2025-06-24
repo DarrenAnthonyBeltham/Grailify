@@ -55,6 +55,54 @@ type SellPageCategory struct {
 	Items []model.Item `json:"items"`
 }
 
+type ListingPayload struct {
+    ItemID      int     `json:"itemId"`
+    Size        string  `json:"size"`
+    Price       float64 `json:"price"`
+    Stock       int     `json:"stock"`
+}
+
+func (h *ItemsHandler) CreateListing(w http.ResponseWriter, r *http.Request) {
+    userID, ok := r.Context().Value("userID").(int)
+    if !ok {
+        http.Error(w, "Unauthorized: Could not get user ID from token", http.StatusUnauthorized)
+        return
+    }
+
+    var payload ListingPayload
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    var sizeID int
+    var sizeIDNull sql.NullInt64
+    if payload.Size != "" && payload.Size != "One Size" { 
+        err := h.DB.QueryRow("SELECT id FROM sizes WHERE size_value = ?", payload.Size).Scan(&sizeID)
+        if err != nil {
+            if err == sql.ErrNoRows {
+                http.Error(w, "Invalid size provided", http.StatusBadRequest)
+                return
+            }
+            http.Error(w, "Database error finding size", http.StatusInternalServerError)
+            return
+        }
+        sizeIDNull = sql.NullInt64{Int64: int64(sizeID), Valid: true}
+    }
+
+    query := "INSERT INTO item_inventory (item_id, user_id, size_id, price, stock) VALUES (?, ?, ?, ?, ?)"
+    
+    _, err := h.DB.Exec(query, payload.ItemID, userID, sizeIDNull, payload.Price, payload.Stock)
+    if err != nil {
+        log.Printf("Error creating listing for user %d: %v", userID, err)
+        http.Error(w, "Failed to create listing", http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Listing created successfully!"})
+}
+
 func (h *ItemsHandler) GetSellPageData(w http.ResponseWriter, r *http.Request) {
 	query := `
         SELECT 

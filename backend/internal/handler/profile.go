@@ -21,6 +21,7 @@ type ProfileResponse struct {
 	Addresses      []model.UserAddress       `json:"addresses"`
 	PaymentMethods []model.UserPaymentMethod `json:"paymentMethods"`
 	OrderHistory   []model.Order             `json:"orderHistory"`
+	UserListings   []model.UserListing       `json:"userListings"`
 }
 
 type CheckoutPayload struct {
@@ -94,9 +95,9 @@ func (h *ProfileHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID, _ := r.Context().Value("userID").(int)
+	
 	var user model.User
 	h.DB.QueryRow("SELECT id, username, email FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Username, &user.Email)
 
@@ -136,14 +137,38 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
         }
     }
 
+	var userListings []model.UserListing
+	listingRows, _ := h.DB.Query(`
+		SELECT ii.id, i.id, i.name, i.image_url, s.size_value, ii.price, ii.stock 
+		FROM item_inventory ii
+		JOIN items i ON ii.item_id = i.id
+		LEFT JOIN sizes s ON ii.size_id = s.id
+		WHERE ii.user_id = ?
+		ORDER BY ii.id DESC
+	`, userID)
+	if listingRows != nil {
+		defer listingRows.Close()
+		for listingRows.Next() {
+			var listing model.UserListing
+			var sizeValue sql.NullString
+			listingRows.Scan(&listing.ListingID, &listing.ItemID, &listing.ItemName, &listing.ItemImageURL, &sizeValue, &listing.Price, &listing.Stock)
+			if sizeValue.Valid {
+				listing.Size = sizeValue.String
+			} else {
+				listing.Size = "One Size"
+			}
+			userListings = append(userListings, listing)
+		}
+	}
 
 	response := ProfileResponse{
 		User:           user,
 		Addresses:      addresses,
 		PaymentMethods: paymentMethods,
 		OrderHistory:   orderHistory,
+		UserListings:   userListings,
 	}
-
+    w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
