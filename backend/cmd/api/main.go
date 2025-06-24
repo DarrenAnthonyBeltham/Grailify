@@ -79,7 +79,9 @@ func main() {
 	r.HandleFunc("/api/item", itemsHandler.GetItemByID).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/categories", itemsHandler.GetAllCategories).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/search", itemsHandler.SearchItems).Methods("GET", "OPTIONS")
-	r.HandleFunc("/api/trending", itemsHandler.GetTrendingItems).Methods("GET", "OPTIONS") // This line is added back
+	r.HandleFunc("/api/trending", itemsHandler.GetTrendingItems).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/sell-page-items", itemsHandler.GetSellPageData).Methods("GET", "OPTIONS")
+
 
 	api := r.PathPrefix("/api").Subrouter()
 	api.Use(jwtMiddleware)

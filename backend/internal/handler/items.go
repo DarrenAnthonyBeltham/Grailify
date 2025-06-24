@@ -48,6 +48,75 @@ type SearchResult struct {
 	ImageURL string `json:"imageUrl"`
 }
 
+type SellPageCategory struct {
+	ID    int          `json:"id"`
+	Name  string       `json:"name"`
+	Slug  string       `json:"slug"`
+	Items []model.Item `json:"items"`
+}
+
+func (h *ItemsHandler) GetSellPageData(w http.ResponseWriter, r *http.Request) {
+	query := `
+        SELECT 
+            c.id as category_id, 
+            c.name as category_name, 
+            c.slug as category_slug, 
+            i.id as item_id, 
+            i.name as item_name, 
+            i.brand as item_brand, 
+            i.image_url as item_image_url, 
+            i.price as item_price
+        FROM categories c
+        LEFT JOIN items i ON c.id = i.category_id
+        ORDER BY c.id, i.items_sold DESC
+    `
+	rows, err := h.DB.Query(query)
+	if err != nil {
+		http.Error(w, "Failed to fetch sell page data", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	categoryMap := make(map[int]*SellPageCategory)
+	var categories []*SellPageCategory 
+
+	for rows.Next() {
+		var catID int
+		var catName, catSlug string
+		var item model.Item
+		var itemID sql.NullInt64
+		var itemName, itemBrand, itemImageURL sql.NullString
+		var itemPrice sql.NullFloat64
+
+		if err := rows.Scan(&catID, &catName, &catSlug, &itemID, &itemName, &itemBrand, &itemImageURL, &itemPrice); err != nil {
+			log.Printf("Error scanning sell page data: %v", err)
+			continue
+		}
+
+		if _, ok := categoryMap[catID]; !ok {
+			categoryMap[catID] = &SellPageCategory{
+				ID:    catID,
+				Name:  catName,
+				Slug:  catSlug,
+				Items: []model.Item{},
+			}
+			categories = append(categories, categoryMap[catID])
+		}
+		
+		if itemID.Valid {
+			item.ID = int(itemID.Int64)
+			item.Name = itemName.String
+			item.Brand = itemBrand.String
+			item.ImageURL = itemImageURL.String
+			item.Price = itemPrice.Float64
+			categoryMap[catID].Items = append(categoryMap[catID].Items, item)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(categories)
+}
+
 func (h *ItemsHandler) GetTrendingItems(w http.ResponseWriter, r *http.Request) {
 	
 	fetchItems := func(query string) ([]model.Item, error) {
