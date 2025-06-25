@@ -1,4 +1,4 @@
-# Grailify  Grailify
+# Grailify  
 
 > The premier online marketplace for authentic sneakers, apparel, and collectibles. Built with a powerful Go backend and a responsive Next.js frontend.
 
@@ -41,18 +41,4 @@ This project is a monorepo containing a separate frontend and backend.
 | | [**MySQL**](https://www.mysql.com/) | The relational database used for storing all application data. |
 | | [**JWT**](https://jwt.io/) | JSON Web Tokens for handling secure user authentication. |
 
-## 🚀 Getting Started
-
-To get a local copy up and running, follow these simple steps.
-
-### Prerequisites
-
-- **Go**: Version 1.18 or higher.
-- **Node.js**: Version 18.x or higher.
-- **MySQL**: A running instance of a MySQL server.
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/your-username/grailify.git
-cd grailify
+Link for the SQL: https://drive.google.com/file/d/1fFJlZVQ1-b7VYsCdJgmZOajViqs7lUqt/view?usp=sharing
