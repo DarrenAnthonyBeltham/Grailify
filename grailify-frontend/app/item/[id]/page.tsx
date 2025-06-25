@@ -10,6 +10,7 @@ interface InventoryInfo {
     price: number;
     stock: number;
 }
+
 interface PriceHistoryEntry {
     id: number;
     item_id: number;
@@ -17,6 +18,12 @@ interface PriceHistoryEntry {
     type: string;
     recorded_at: string;
 }
+
+interface AllSizeInfo {
+    id: number;
+    size: string;
+}
+
 interface ItemDetailData {
     item: {
         id: number;
@@ -33,6 +40,7 @@ interface ItemDetailData {
     displayPrice: number;
     inventory: InventoryInfo[];
     priceHistory: PriceHistoryEntry[];
+    allSizes: AllSizeInfo[];
 }
 
 const BackIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -238,7 +246,7 @@ export default function ItemPage() {
         imageUrl: itemData.item.imageUrl,
     };
 
-    return (
+        return (
         <>
             {showCartModal && <AddToCartModal item={modalItemInfo} onClose={() => setShowCartModal(false)} />}
             <div className="bg-white">
@@ -262,19 +270,40 @@ export default function ItemPage() {
                                 <p className="text-2xl font-bold text-black">${selectedPrice ? selectedPrice.toFixed(2) : 'N/A'}</p>
                             </div>
 
-                            {(itemData.inventory && itemData.inventory.length > 0) && (
+                            {(itemData.allSizes && itemData.allSizes.length > 0) && (
                                 <div className="mt-6">
                                     <h3 className="text-sm font-medium text-neutral-700 mb-2">Select Size</h3>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {itemData.inventory.map(inv => (
-                                            <button
-                                                key={inv.inventoryId}
-                                                onClick={() => handleSizeSelect(inv)}
-                                                className={`px-4 py-3 rounded-lg text-center font-semibold border text-sm transition-colors ${selectedInventoryId === inv.inventoryId ? 'bg-black text-white border-black' : 'bg-white text-black border-neutral-300 hover:border-black'}`}
-                                            >
-                                                {inv.size}
-                                            </button>
-                                        ))}
+                                        {itemData.allSizes.map(sizeInfo => {
+                                            const inventoryForSize = itemData.inventory.find(inv => inv.size === sizeInfo.size);
+                                            const isInStock = !!inventoryForSize;
+
+                                            return (
+                                                <button
+                                                    key={sizeInfo.id}
+                                                    onClick={() => isInStock && handleSizeSelect(inventoryForSize)}
+                                                    disabled={!isInStock}
+                                                    className={`
+                                                        px-4 py-3 rounded-lg text-center font-semibold border text-sm transition-colors relative
+                                                        ${selectedInventoryId === inventoryForSize?.inventoryId
+                                                            ? 'bg-black text-white border-black'
+                                                            : isInStock
+                                                                ? 'bg-white text-black border-neutral-300 hover:border-black'
+                                                                : 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed'
+                                                        }
+                                                    `}
+                                                >
+                                                    {sizeInfo.size}
+                                                    {!isInStock && (
+                                                        <span className="absolute inset-0 flex items-center justify-center">
+                                                            <svg className="w-full h-full text-neutral-300" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                                <line x1="0" y1="100" x2="100" y2="0" stroke="currentColor" strokeWidth="2" />
+                                                            </svg>
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -285,9 +314,9 @@ export default function ItemPage() {
                             </div>
 
                             <div className="mt-6 grid grid-cols-1">
-                               <button onClick={handleAddToCart} className="w-full bg-black text-white py-4 rounded-lg font-semibold hover:bg-neutral-800">
+                            <button onClick={handleAddToCart} className="w-full bg-black text-white py-4 rounded-lg font-semibold hover:bg-neutral-800">
                                     Add to Cart
-                               </button>
+                            </button>
                             </div>
 
                             <div className="mt-8">
@@ -301,17 +330,17 @@ export default function ItemPage() {
                         <div className="flex flex-col sm:flex-row justify-between items-center">
                             <h2 className="text-2xl font-bold text-center sm:text-left">Price History</h2>
                             <div className="mt-4 sm:mt-0">
-                               <TimeframeSelector onSelect={setTimeframe} selected={timeframe} />
+                            <TimeframeSelector onSelect={setTimeframe} selected={timeframe} />
                             </div>
                         </div>
-                         <div className="mt-6">
-                             <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
+                        <div className="mt-6">
+                            <PriceChart data={filteredPriceHistory.map(p => ({ date: p.recorded_at, price: p.price }))} />
                         </div>
                         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                           <StatCard title="Last Sale" value={lastSale ? `$${lastSale.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-blue-100" />
-                           <StatCard title="Retail Price" value={itemData.item.price ? `$${itemData.item.price.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
-                           <StatCard title="Total Sold" value={itemData.item.itemsSold?.toLocaleString() ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} iconBg="bg-green-100" />
-                           <StatCard title="Price Premium" value={pricePremium ?? '--'} change="vs Retail" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-yellow-100" />
+                        <StatCard title="Last Sale" value={lastSale ? `$${lastSale.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-blue-100" />
+                        <StatCard title="Retail Price" value={itemData.item.price ? `$${itemData.item.price.toFixed(2)}` : 'N/A'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01" /></svg>} iconBg="bg-purple-100" />
+                        <StatCard title="Total Sold" value={itemData.item.itemsSold?.toLocaleString() ?? '0'} icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>} iconBg="bg-green-100" />
+                        <StatCard title="Price Premium" value={pricePremium ?? '--'} change="vs Retail" icon={<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} iconBg="bg-yellow-100" />
                         </div>
                     </div>
                 </div>

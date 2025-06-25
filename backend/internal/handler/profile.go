@@ -143,7 +143,7 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 		FROM item_inventory ii
 		JOIN items i ON ii.item_id = i.id
 		LEFT JOIN sizes s ON ii.size_id = s.id
-		WHERE ii.user_id = ?
+		WHERE ii.user_id = ? 
 		ORDER BY ii.id DESC
 	`, userID)
 	if listingRows != nil {

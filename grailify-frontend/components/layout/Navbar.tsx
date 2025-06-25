@@ -4,13 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface SearchResult {
-  id: number;
-  name: string;
-  brand: string;
-  imageUrl: string;
-}
+import SearchComponent from './SearchComponent';
 
 interface CartItem {
   id: number;
@@ -20,32 +14,14 @@ interface CartItem {
   size: string;
 }
 
-const SearchIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
 const CartIcon = (props: React.SVGProps<SVGSVGElement>) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>;
-
-function useDebounce(value: string, delay: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-  return debouncedValue;
-}
 
 export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const cartContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -58,42 +34,28 @@ export default function Navbar() {
     updateCart();
 
     window.addEventListener('storage', updateCart);
-    return () => window.removeEventListener('storage', updateCart);
+    window.addEventListener('cartUpdated', updateCart);
+    return () => {
+        window.removeEventListener('storage', updateCart);
+        window.removeEventListener('cartUpdated', updateCart);
+    }
   }, []);
 
   useEffect(() => {
-    if (debouncedSearchQuery) {
-      const fetchResults = async () => {
-        const response = await fetch(`http://localhost:8080/api/search?q=${debouncedSearchQuery}`);
-        const data: SearchResult[] = await response.json();
-        setResults(data);
-      };
-      fetchResults();
-    } else {
-      setResults([]);
-    }
-  }, [debouncedSearchQuery]);
-
-  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setIsSearchFocused(false);
+      if (cartContainerRef.current && !cartContainerRef.current.contains(event.target as Node)) {
+        setIsCartOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     setIsLoggedIn(false);
     router.push('/');
-  };
-
-  const closeSearch = () => {
-    setSearchQuery('');
-    setResults([]);
-    setIsSearchFocused(false);
   };
 
   return (
@@ -110,31 +72,7 @@ export default function Navbar() {
             </nav>
           </div>
 
-          <div ref={searchContainerRef} className="flex-1 max-w-md mx-8 hidden lg:block relative">
-             <div className="relative">
-                <input type="search" placeholder="Search for your Grail..." className="w-full h-10 pl-10 pr-4 rounded-full border border-neutral-300 bg-neutral-100/80 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onFocus={() => setIsSearchFocused(true)} />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><SearchIcon className="h-5 w-5 text-neutral-500" /></div>
-             </div>
-             <AnimatePresence>
-             {isSearchFocused && results.length > 0 && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full mt-2 w-full bg-white border border-neutral-200 rounded-lg shadow-lg overflow-hidden">
-                    <ul className="divide-y divide-neutral-100">
-                        {results.map((item) => (
-                        <li key={item.id}>
-                            <Link href={`/item/${item.id}`} onClick={closeSearch} className="flex items-center p-3 hover:bg-neutral-50">
-                                <img src={item.imageUrl} alt={item.name} className="w-12 h-12 object-contain rounded-md bg-neutral-100" />
-                                <div className="ml-4">
-                                    <p className="text-sm font-medium text-black">{item.name}</p>
-                                    <p className="text-xs text-neutral-500">{item.brand}</p>
-                                </div>
-                            </Link>
-                        </li>
-                        ))}
-                    </ul>
-                </motion.div>
-             )}
-             </AnimatePresence>
-          </div>
+          <SearchComponent className="flex-1 max-w-md mx-8 hidden lg:block" />
 
           <div className="flex items-center space-x-4">
             {isLoggedIn ? (
@@ -150,7 +88,7 @@ export default function Navbar() {
             )}
             <Link href="/sell" className="text-sm font-medium border border-neutral-300 px-4 py-2 rounded-full hover:bg-neutral-100 transition-colors">Sell</Link>
             
-            <div className="relative">
+            <div ref={cartContainerRef} className="relative">
                 <button onClick={() => setIsCartOpen(!isCartOpen)} className="p-2 rounded-full hover:bg-neutral-100 relative">
                     <CartIcon className="h-6 w-6 text-black"/>
                     {cartItems.length > 0 && (
@@ -168,8 +106,8 @@ export default function Navbar() {
                             {cartItems.length > 0 ? (
                                 <>
                                 <div className="max-h-64 overflow-y-auto p-4 border-t border-b">
-                                    {cartItems.map(item => (
-                                        <div key={item.id} className="flex items-center py-2">
+                                    {cartItems.map((item, index) => (
+                                        <div key={`${item.id}-${index}`} className="flex items-center py-2">
                                             <img src={item.imageUrl} alt={item.name} className="w-16 h-16 object-contain rounded-md bg-neutral-100"/>
                                             <div className="ml-3">
                                                 <p className="text-sm font-medium">{item.name}</p>

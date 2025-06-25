@@ -8,12 +8,17 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
+	"github.com/gorilla/mux"
 	"grailify/internal/model"
 )
 
 type ItemsHandler struct {
 	DB *sql.DB
+}
+
+type UpdateListingPayload struct {
+	Price float64 `json:"price"`
+	Stock int     `json:"stock"`
 }
 
 type TrendingResponse struct {
@@ -32,6 +37,12 @@ type InventoryInfo struct {
 	Size        string  `json:"size"`
 	Price       float64 `json:"price"`
 	Stock       int     `json:"stock"`
+	Seller      string  `json:"seller"` 
+}
+
+type AllSizeInfo struct {
+	ID   int    `json:"id"`
+	Size string `json:"size"`
 }
 
 type ItemDetailResponse struct {
@@ -39,6 +50,7 @@ type ItemDetailResponse struct {
 	DisplayPrice float64              `json:"displayPrice"`
 	PriceHistory []model.PriceHistory `json:"priceHistory"`
 	Inventory    []InventoryInfo      `json:"inventory"`
+	AllSizes     []AllSizeInfo        `json:"allSizes"` 
 }
 
 type SearchResult struct {
@@ -450,11 +462,17 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	var inventory []InventoryInfo
 	inventoryQuery := `
-        SELECT ii.id, s.size_value, ii.price, ii.stock
+        SELECT 
+            ii.id, 
+            s.size_value, 
+            ii.price, 
+            ii.stock,
+            COALESCE(u.username, 'Grailify Store') AS seller_name
         FROM item_inventory ii
-        JOIN sizes s ON ii.size_id = s.id
+        LEFT JOIN sizes s ON ii.size_id = s.id
+        LEFT JOIN users u ON ii.user_id = u.id
         WHERE ii.item_id = ?
-        ORDER BY s.id
+        ORDER BY ii.price ASC, seller_name ASC
     `
 	invRows, err := h.DB.Query(inventoryQuery, itemID)
 	if err != nil {
@@ -465,9 +483,15 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 
 	for invRows.Next() {
 		var invItem InventoryInfo
-		if err := invRows.Scan(&invItem.InventoryID, &invItem.Size, &invItem.Price, &invItem.Stock); err != nil {
+		var sizeValue sql.NullString;
+		if err := invRows.Scan(&invItem.InventoryID, &sizeValue, &invItem.Price, &invItem.Stock, &invItem.Seller); err != nil {
 			http.Error(w, "Failed to scan inventory row", http.StatusInternalServerError)
 			return
+		}
+		if sizeValue.Valid {
+			invItem.Size = sizeValue.String
+		} else {
+			invItem.Size = "One Size" 
 		}
 		inventory = append(inventory, invItem)
 	}
@@ -490,13 +514,111 @@ func (h *ItemsHandler) GetItemByID(w http.ResponseWriter, r *http.Request) {
 		priceHistory = append(priceHistory, historyPoint)
 	}
 
+	var allSizes []AllSizeInfo
+	allSizesQuery := "SELECT id, size_value FROM sizes WHERE category_id = ? ORDER BY id"
+	allSizesRows, err := h.DB.Query(allSizesQuery, item.CategoryID)
+	if err != nil {
+		log.Printf("Could not fetch all sizes for category %d: %v", item.CategoryID, err)
+	} else {
+		defer allSizesRows.Close()
+		for allSizesRows.Next() {
+			var size AllSizeInfo
+			if err := allSizesRows.Scan(&size.ID, &size.Size); err != nil {
+				log.Printf("Failed to scan a size row: %v", err)
+				continue
+			}
+			allSizes = append(allSizes, size)
+		}
+	}
+
 	response := ItemDetailResponse{
 		Item:         item,
 		DisplayPrice: displayPrice,
 		Inventory:    inventory,
 		PriceHistory: priceHistory,
+		AllSizes:     allSizes,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+func (h *ItemsHandler) UpdateListing(w http.ResponseWriter, r *http.Request) {
+    userID, ok := r.Context().Value("userID").(int)
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    vars := mux.Vars(r)
+    listingID, err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Error(w, "Invalid listing ID", http.StatusBadRequest)
+        return
+    }
+
+    var payload UpdateListingPayload
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    query := "UPDATE item_inventory SET price = ?, stock = ? WHERE id = ? AND user_id = ?"
+    result, err := h.DB.Exec(query, payload.Price, payload.Stock, listingID, userID)
+    if err != nil {
+        log.Printf("Error updating listing %d for user %d: %v", listingID, userID, err)
+        http.Error(w, "Failed to update listing", http.StatusInternalServerError)
+        return
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        http.Error(w, "Failed to check rows affected", http.StatusInternalServerError)
+        return
+    }
+
+    if rowsAffected == 0 {
+        http.Error(w, "Listing not found or you do not have permission to edit it", http.StatusNotFound)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Listing updated successfully"})
+}
+
+func (h *ItemsHandler) DeleteListing(w http.ResponseWriter, r *http.Request) {
+    userID, ok := r.Context().Value("userID").(int)
+    if !ok {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    vars := mux.Vars(r)
+    listingID, err := strconv.Atoi(vars["id"])
+    if err != nil {
+        http.Error(w, "Invalid listing ID", http.StatusBadRequest)
+        return
+    }
+
+    query := "DELETE FROM item_inventory WHERE id = ? AND user_id = ?"
+    result, err := h.DB.Exec(query, listingID, userID)
+    if err != nil {
+        log.Printf("Error deleting listing %d for user %d: %v", listingID, userID, err)
+        http.Error(w, "Failed to delete listing", http.StatusInternalServerError)
+        return
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        http.Error(w, "Failed to check rows affected", http.StatusInternalServerError)
+        return
+    }
+
+    if rowsAffected == 0 {
+        http.Error(w, "Listing not found or you do not have permission to delete it", http.StatusNotFound)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Listing deleted successfully"})
 }

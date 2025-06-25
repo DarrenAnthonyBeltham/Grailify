@@ -18,10 +18,28 @@ import (
 var jwtKey = []byte("my_super_secret_key_that_is_long_and_secure")
 
 func corsMiddleware(next http.Handler) http.Handler {
+	allowedOrigins := []string{
+		"http://localhost:3000",
+		"http://192.168.20.134:3000",
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		origin := r.Header.Get("Origin")
+		isAllowed := false
+		for _, allowedOrigin := range allowedOrigins {
+			if origin == allowedOrigin {
+				isAllowed = true
+				break
+			}
+		}
+
+		if isAllowed {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, PATCH")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -52,7 +70,14 @@ func jwtMiddleware(next http.Handler) http.Handler {
 			return jwtKey, nil
 		})
 
-		if err != nil || !token.Valid {
+		if err != nil {
+			log.Printf("JWT validation error: %v", err)
+			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		if !token.Valid {
+			log.Printf("Token is not valid, but no error was returned.")
 			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
@@ -77,8 +102,8 @@ func main() {
 	r.HandleFunc("/api/login", authHandler.Login).Methods("POST", "OPTIONS")
 	r.HandleFunc("/api/items", itemsHandler.GetAllItems).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/item", itemsHandler.GetItemByID).Methods("GET", "OPTIONS")
-	r.HandleFunc("/api/categories", itemsHandler.GetAllCategories).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/search", itemsHandler.SearchItems).Methods("GET", "OPTIONS")
+	r.HandleFunc("/api/categories", itemsHandler.GetAllCategories).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/trending", itemsHandler.GetTrendingItems).Methods("GET", "OPTIONS")
 	r.HandleFunc("/api/sell-page-items", itemsHandler.GetSellPageData).Methods("GET", "OPTIONS")
 
@@ -94,6 +119,8 @@ func main() {
 	api.HandleFunc("/payment-methods/{id:[0-9]+}", profileHandler.DeletePaymentMethod).Methods("DELETE", "OPTIONS")
 	api.HandleFunc("/orders", profileHandler.CreateOrder).Methods("POST", "OPTIONS")
 	api.HandleFunc("/listings", itemsHandler.CreateListing).Methods("POST", "OPTIONS")
+	api.HandleFunc("/listings/{id:[0-9]+}", itemsHandler.UpdateListing).Methods("PUT", "OPTIONS")
+	api.HandleFunc("/listings/{id:[0-9]+}", itemsHandler.DeleteListing).Methods("DELETE", "OPTIONS")
 
 	log.Println("Starting Grailify server on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

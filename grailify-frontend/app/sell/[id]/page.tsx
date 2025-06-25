@@ -80,6 +80,13 @@ export default function CreateListingPage() {
         const fetchItemData = async () => {
             try {
                 const response = await fetch(`http://localhost:8080/api/item?id=${id}`);
+                if (!response.ok) {
+                if (response.status === 401) {
+                    localStorage.removeItem('authToken');
+                    router.push('/login?sessionExpired=true');
+                }
+                throw new Error('Failed to create listing.');
+            }
                 if (!response.ok) throw new Error('Item not found');
                 const data = await response.json();
                 setItemData(data);

@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import SearchComponent from '@/components/layout/SearchComponent';
 
-// --- Type Definitions ---
 interface Product {
     id: number;
     name: string;
@@ -13,7 +13,6 @@ interface Product {
     imageUrl: string;
 }
 
-// --- Reusable Components ---
 const ProductCard = ({ id, name, brand, price, imageUrl }: Product) => {
     return (
         <Link href={`/item/${id}`} className="group">
@@ -184,6 +183,10 @@ export default function HomePage() {
                             </div>
                         </>
                     )}
+
+                    <div className="mt-8 lg:hidden">
+                        <SearchComponent className="max-w-md mx-auto" />
+                    </div>
                 </div>
             </section>
 
