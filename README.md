@@ -18,7 +18,6 @@ Grailify is a full-featured e-commerce platform that allows users to both buy an
 - **Merged Inventory:** Product pages seamlessly display inventory from both the main store and third-party sellers, sorted by price.
 - **Out-of-Stock Indicators:** All possible sizes for a category are shown, with unavailable sizes clearly marked.
 - **Shopping Cart:** Add items to a persistent cart managed with `localStorage`.
-- **Light/Dark Mode:** A theme toggle for user viewing comfort.
 
 ### 💰 Seller Features
 - **User Profile Page:** A central dashboard to manage account details.
