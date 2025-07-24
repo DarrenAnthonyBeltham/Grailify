@@ -1,9 +1,5 @@
 # Grailify  
-
-> The premier online marketplace for authentic sneakers, apparel, and collectibles. Built with a powerful Go backend and a responsive Next.js frontend.
-
-
-*Replace the URL above with a real screenshot of your application's homepage!*
+The premier online marketplace for authentic sneakers, apparel, and collectibles. Built with a powerful Go backend and a responsive Next.js frontend.
 
 ## ✨ Core Features
 
